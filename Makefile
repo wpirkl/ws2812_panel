@@ -1,106 +1,81 @@
 export CROSS_COMPILE = arm-none-eabi-
+STLINK = st-flash
+
 #root directory
 export ROOTDIR=$(shell pwd)
 
 # Sources
 SRCS = main.c stm32f4xx_it.c system_stm32f4xx.c syscalls.c
+CPPSRCS = 
 
 # USB
 SRCS += usbd_usr.c usbd_cdc_vcp.c usbd_desc.c usb_bsp.c
 
+# add startup file to build
+STARTUP = lib/startup_stm32f4xx.s
+
 # Project name
 PROJ_NAME = ws2812_panel
 
-# output folder
-OUTPATH=build
+###############################
+# Add sources before this line
+###############################
 
-###################################################
+include config.mk
 
-CC=$(CROSS_COMPILE)gcc
-OBJCOPY=$(CROSS_COMPILE)objcopy
-SIZE=$(CROSS_COMPILE)size
-
-CFLAGS  = -std=gnu99 -g -O2 -Wall
-CFLAGS += -mlittle-endian -mthumb -mthumb-interwork -nostartfiles -mcpu=cortex-m4
-
-CFLAGS += -fsingle-precision-constant -Wdouble-promotion
-CFLAGS += -mfpu=fpv4-sp-d16 -mfloat-abi=hard
-
-###################################################
-
-vpath %.c src
+###############################
+# Add compilation parameters after this line
+###############################
 
 LIBPATH = lib
 
+# libs to link
+LIBS  = ws2812
+LIBS += stdperiph
+LIBS += usbdevcore
+LIBS += usbdevcdc
+LIBS += usbcore
+LIBS += esp8266
+#LIBS += freertos
+
+LIBPATH_ws2812     = $(LIBPATH)/ws2812
+LIBPATH_stdperiph  = $(LIBPATH)/StdPeriph
+LIBPATH_usbdevcore = $(LIBPATH)/USB_Device/Core
+LIBPATH_usbdevcdc  = $(LIBPATH)/USB_Device/Class/cdc
+LIBPATH_usbcore    = $(LIBPATH)/USB_OTG
+LIBPATH_esp8266    = $(LIBPATH)/esp8266
+LIBPATH_freertos   = $(LIBPATH)/FreeRTOS
+
+# concatenate all library paths
+LIB = $(addprefix -L,$(foreach lib,$(LIBS),$(LIBPATH_$(lib)))) $(addprefix -l,$(LIBS))
+
+# LIBS includes
+CFLAGS += $(addprefix -I,$(addsuffix /inc,$(foreach lib,$(LIBS),$(LIBPATH_$(lib)))))
+
+# Libraries in style path/libxyz.a
+LIBS_BUILD = $(foreach lib,$(LIBS),$(addsuffix /lib$(lib).a,$(LIBPATH_$(lib))))
+
 # Includes
 CFLAGS += -Iinc
-CFLAGS += -Ilib/Core/cmsis
-CFLAGS += -Ilib/Core/stm32
-CFLAGS += -Ilib/Conf
+CFLAGS += -I$(LIBPATH)/Core/cmsis
+CFLAGS += -I$(LIBPATH)/Core/stm32
+CFLAGS += -I$(LIBPATH)/Conf
 
-# Library paths
-LIBPATHS  = -Llib/StdPeriph
-LIBPATHS += -Llib/USB_Device/Core
-LIBPATHS += -Llib/USB_Device/Class/cdc
-LIBPATHS += -Llib/USB_OTG
-LIBPATHS += -Llib/ws2812
-# LIBPATHS += -Llib/FreeRTOS
-
-# Libraries to link
-LIBS  = -lm
-LIBS += -lws2812
-LIBS += -lstdperiph
-LIBS += -lusbdevcore
-LIBS += -lusbdevcdc
-LIBS += -lusbcore
-# LIBS += -lfreertos
-
-# Extra includes
-CFLAGS += -Ilib/StdPeriph/inc
-CFLAGS += -Ilib/USB_OTG/inc
-CFLAGS += -Ilib/USB_Device/Core/inc
-CFLAGS += -Ilib/USB_Device/Class/cdc/inc
-CFLAGS += -Ilib/ws2812/inc
-# CFLAGS += -Ilib/FreeRTOS/inc
-
-# add startup file to build
-SRCS += lib/startup_stm32f4xx.s
-
-OBJS = $(SRCS:.c=.o)
+# add system libraries here
+LIB += -lm
 
 ###################################################
 
-.PHONY: lib clean cleanlib proj 
+.PHONY: clean cleanlib $(LIBS_BUILD) flash
 
-all: lib proj
+all: $(OUTPATH)/$(PROJ_NAME).elf
 	$(SIZE) $(OUTPATH)/$(PROJ_NAME).elf
 
-lib:
-	$(MAKE) -C $(LIBPATH)/StdPeriph
-	$(MAKE) -C $(LIBPATH)/USB_OTG
-	$(MAKE) -C $(LIBPATH)/USB_Device/Core
-	$(MAKE) -C $(LIBPATH)/USB_Device/Class/cdc
-#	$(MAKE) -C $(LIBPATH)/USB_Host/Core
-#	$(MAKE) -C $(LIBPATH)/USB_Host/Class/MSC
-#	$(MAKE) -C $(LIBPATH)/fat_fs
-	$(MAKE) -C $(LIBPATH)/ws2812
-#	$(MAKE) -C $(LIBPATH)/FreeRTOS
+$(LIBS_BUILD): config.mk rules.mk
+	$(MAKE) $(notdir $@) -C $(dir $@)
 
-cleanlib:
-	$(MAKE) clean -C $(LIBPATH)/StdPeriph
-	$(MAKE) clean -C $(LIBPATH)/USB_OTG
-	$(MAKE) clean -C $(LIBPATH)/USB_Device/Core
-	$(MAKE) clean -C $(LIBPATH)/USB_Device/Class/cdc
-#	$(MAKE) clean -C $(LIBPATH)/USB_Host/Core
-#	$(MAKE) clean -C $(LIBPATH)/USB_Host/Class/MSC
-#	$(MAKE) clean -C $(LIBPATH)/fat_fs
-	$(MAKE) clean -C $(LIBPATH)/ws2812
-#	$(MAKE) clean -C $(LIBPATH)/FreeRTOS
-
-proj: $(OUTPATH)/$(PROJ_NAME).bin
-
-$(OUTPATH)/$(PROJ_NAME).elf: $(SRCS)
-	$(CC) $(CFLAGS) -Tstm32_flash.ld $^ -o $@ $(LIBPATHS) $(LIBS)
+$(OUTPATH)/$(PROJ_NAME).elf: $(OBJS) $(CPPOBJS) $(LIBS_BUILD)
+	$(CC) $(CFLAGS) -Tstm32_flash.ld $(OBJS) $(CPPOBJS) $(STARTUP) -o $@ $(SYSLIBS) $(LIB) -Wl,-Map=$(OUTPATH)/$(PROJ_NAME).map
 
 $(OUTPATH)/$(PROJ_NAME).hex: $(OUTPATH)/$(PROJ_NAME).elf
 	$(OBJCOPY) -O ihex $< $@
@@ -108,9 +83,16 @@ $(OUTPATH)/$(PROJ_NAME).hex: $(OUTPATH)/$(PROJ_NAME).elf
 $(OUTPATH)/$(PROJ_NAME).bin: $(OUTPATH)/$(PROJ_NAME).elf
 	$(OBJCOPY) -O binary $< $@
 
-clean:
-	rm -f *.o
+cleanlib:
+	$(foreach lib,$(LIBS),$(MAKE) clean -C $(LIBPATH_$(lib));)
+
+clean::
+	rm -f $(OUTPATH)/$(PROJ_NAME).map
 	rm -f $(OUTPATH)/$(PROJ_NAME).elf
-#	rm -f $(OUTPATH)/$(PROJ_NAME).hex
+	rm -f $(OUTPATH)/$(PROJ_NAME).hex
 	rm -f $(OUTPATH)/$(PROJ_NAME).bin
 
+flash: $(OUTPATH)/$(PROJ_NAME).bin
+	$(STLINK) write $< 0x08000000
+
+include rules.mk

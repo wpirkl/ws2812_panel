@@ -12,7 +12,6 @@
 #include "usbd_desc.h"
 #include "usbd_cdc_vcp.h"
 
-// #include "stm32_ub_ws2812_8ch.h"
 #include "ws2812.h"
 
 // Private variables
@@ -133,10 +132,10 @@ int main(void) {
                     // increment red, decrement green
                     if(lRed < 255) {
                         lRed++;
-                                        lGreen--;
+                        lGreen--;
                     }
                     if(lRed == 255) {
-                         lState = 1;
+                        lState = 1;
                     }
                     break;
             }

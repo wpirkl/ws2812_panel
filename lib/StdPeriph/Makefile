@@ -1,9 +1,4 @@
 
-include $(ROOTDIR)/config.mk
-
-# Includes
-CFLAGS += -Iinc -I../Core/cmsis -I../Core/stm32
-
 # Sources
 SRCS = misc.c stm32f4xx_dma.c stm32f4xx_rcc.c stm32f4xx_adc.c \
 	stm32f4xx_exti.c stm32f4xx_rng.c stm32f4xx_can.c stm32f4xx_flash.c \
@@ -15,6 +10,12 @@ SRCS = misc.c stm32f4xx_dma.c stm32f4xx_rcc.c stm32f4xx_adc.c \
 	stm32f4xx_dac.c stm32f4xx_i2c.c stm32f4xx_wwdg.c \
 	stm32f4xx_dbgmcu.c stm32f4xx_iwdg.c \
 	stm32f4xx_dcmi.c stm32f4xx_pwr.c
+
+# Config
+include $(ROOTDIR)/config.mk
+
+# Includes
+CFLAGS += -Iinc -I../Core/cmsis -I../Core/stm32
 
 
 LIBNAME = libstdperiph.a

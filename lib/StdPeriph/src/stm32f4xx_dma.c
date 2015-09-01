@@ -314,7 +314,7 @@ void DMA_DeInit(DMA_Stream_TypeDef* DMAy_Streamx)
   *         the configuration information for the specified DMA Stream.  
   * @retval None
   */
-void DMA_Init(DMA_Stream_TypeDef* DMAy_Streamx, DMA_InitTypeDef* DMA_InitStruct)
+void DMA_Init(DMA_Stream_TypeDef* DMAy_Streamx, const DMA_InitTypeDef* const DMA_InitStruct)
 {
   uint32_t tmpreg = 0;
 

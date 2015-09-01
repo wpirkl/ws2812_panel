@@ -1,8 +1,8 @@
-
 # Sources
-SRCS += ws2812.c
+SRCS  = esp8266.c
+SRCS += uart_dma.c
 
-# Config
+# Configuration
 include $(ROOTDIR)/config.mk
 
 # Includes
@@ -10,8 +10,9 @@ CFLAGS += -Iinc
 CFLAGS += -I../Core/cmsis
 CFLAGS += -I../Core/stm32
 CFLAGS += -I../StdPeriph/inc
-#output name
-LIBNAME = libws2812.a
 
-#rules
+
+LIBNAME = libesp8266.a
+
+# rules
 include $(ROOTDIR)/rules.mk

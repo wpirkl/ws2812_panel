@@ -1,10 +1,3 @@
-include $(ROOTDIR)/config.mk
-
-# Includes
-CFLAGS += -Iinc
-CFLAGS += -I../Core/cmsis
-CFLAGS += -I../Core/stm32
-CFLAGS += -I../StdPeriph/inc
 
 # Sources
 SRCS += croutine.c
@@ -15,7 +8,16 @@ SRCS += queue.c
 SRCS += tasks.c
 SRCS += timers.c
 
+# Config
+include $(ROOTDIR)/config.mk
+
+# Includes
+CFLAGS += -Iinc
+CFLAGS += -I../Core/cmsis
+CFLAGS += -I../Core/stm32
+CFLAGS += -I../StdPeriph/inc
+
 LIBNAME = libfreertos.a
 
-#rules
+# Rules
 include $(ROOTDIR)/rules.mk

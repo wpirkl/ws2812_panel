@@ -4,11 +4,15 @@ SIZE=$(CROSS_COMPILE)size
 
 SRCDIR := src
 OBJDIR := obj
+OUTPATH := build
 
 vpath %.c $(SRCDIR)
+vpath %.cpp $(SRCDIR)
 
 OBJS = $(addprefix $(OBJDIR)/,$(SRCS:.c=.o))
-DEPS = $(addprefix $(OBJDIR)/,$(SRCS:.c=.dep))
+DEPS = $(addprefix $(OBJDIR)/,$(SRCS:.c=.dep) $(CPPSRCS:.cpp=.dep))
+
+CPPOBJS = $(addprefix $(OBJDIR)/,$(CPPSRCS:.cpp=.obj))
 
 CFLAGS  = -g -O2 -Wall
 CFLAGS += -mlittle-endian
@@ -23,3 +27,5 @@ CFLAGS += -mfloat-abi=hard
 
 CFLAGS += -ffreestanding
 CFLAGS += -nostdlib
+
+CPPFLAGS = $(CFLAGS) -lgcc

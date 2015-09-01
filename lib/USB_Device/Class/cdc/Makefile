@@ -1,3 +1,8 @@
+
+# Sources
+SRCS = usbd_cdc_core.c
+
+# Config
 include $(ROOTDIR)/config.mk
 
 # Includes
@@ -7,10 +12,6 @@ CFLAGS += -I../../../Core/stm32
 CFLAGS += -I../../../Conf
 CFLAGS += -I../../../USB_OTG/inc
 CFLAGS += -I../../Core/inc
-
-# Sources
-SRCS = usbd_cdc_core.c
-
 LIBNAME = libusbdevcdc.a
 
 #rules
