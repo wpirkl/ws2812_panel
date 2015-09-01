@@ -68,19 +68,19 @@ LIB += -lm
 
 .PHONY: clean cleanlib $(LIBS_BUILD) flash
 
-all: $(OUTPATH)/$(PROJ_NAME).elf
+all: $(OUTPATH)/$(PROJ_NAME).elf $(OUTPATH)
 	$(SIZE) $(OUTPATH)/$(PROJ_NAME).elf
 
 $(LIBS_BUILD): config.mk rules.mk
 	$(MAKE) $(notdir $@) -C $(dir $@)
 
-$(OUTPATH)/$(PROJ_NAME).elf: $(OBJS) $(CPPOBJS) $(LIBS_BUILD)
+$(OUTPATH)/$(PROJ_NAME).elf: $(OBJS) $(CPPOBJS) $(LIBS_BUILD) $(OUTPATH)
 	$(CC) $(CFLAGS) -Tstm32_flash.ld $(OBJS) $(CPPOBJS) $(STARTUP) -o $@ $(SYSLIBS) $(LIB) -Wl,-Map=$(OUTPATH)/$(PROJ_NAME).map
 
-$(OUTPATH)/$(PROJ_NAME).hex: $(OUTPATH)/$(PROJ_NAME).elf
+$(OUTPATH)/$(PROJ_NAME).hex: $(OUTPATH)/$(PROJ_NAME).elf $(OUTPATH)
 	$(OBJCOPY) -O ihex $< $@
 
-$(OUTPATH)/$(PROJ_NAME).bin: $(OUTPATH)/$(PROJ_NAME).elf
+$(OUTPATH)/$(PROJ_NAME).bin: $(OUTPATH)/$(PROJ_NAME).elf $(OUTPATH)
 	$(OBJCOPY) -O binary $< $@
 
 cleanlib:
@@ -91,6 +91,7 @@ clean::
 	rm -f $(OUTPATH)/$(PROJ_NAME).elf
 	rm -f $(OUTPATH)/$(PROJ_NAME).hex
 	rm -f $(OUTPATH)/$(PROJ_NAME).bin
+	rm -f -r $(OUTPATH)
 
 flash: $(OUTPATH)/$(PROJ_NAME).bin
 	$(STLINK) write $< 0x08000000
