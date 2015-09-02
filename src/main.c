@@ -23,15 +23,6 @@ __ALIGN_BEGIN USB_OTG_CORE_HANDLE  USB_OTG_dev __ALIGN_END;
 
 void init();
 
-void vApplicationStackOverflowHook( xTaskHandle pxTask, signed char *pcTaskName ) {
-
-    taskDISABLE_INTERRUPTS();
-
-    for(;;);
-}
-
-
-
 void led_task(void * inParameters) {
 
     /* power on test */
