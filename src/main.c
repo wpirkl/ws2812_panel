@@ -14,15 +14,155 @@
 
 #include "ws2812.h"
 
+#include "FreeRTOS.h"
+#include "task.h"
+
 // Private variables
 volatile uint32_t time_var1, time_var2;
 __ALIGN_BEGIN USB_OTG_CORE_HANDLE  USB_OTG_dev __ALIGN_END;
 
-
-// Private function prototypes
-void Delay(volatile uint32_t nCount);
 void init();
-void calculation_test();
+
+void vApplicationStackOverflowHook( xTaskHandle pxTask, signed char *pcTaskName ) {
+
+    taskDISABLE_INTERRUPTS();
+
+    for(;;);
+}
+
+
+
+void led_task(void * inParameters) {
+
+    /* power on test */
+    {
+        size_t lColumnNum = ws2812_getLED_PanelNumberOfColumns();
+        size_t lColumnCount;
+        size_t lPatternCount;
+
+        uint8_t lColor[3];
+
+        for(lPatternCount = 0; lPatternCount < 3; lPatternCount++) {
+
+            lColor[lPatternCount] = 255;
+
+            for(lColumnCount = 0; lColumnCount < lColumnNum; lColumnCount++) {
+                switch(lColumnCount % 3) {
+                    case 0:
+                        ws2812_setLED_Column(lColumnCount, lColor[0], lColor[1], lColor[2]);
+                        break;
+                    case 1:
+                        ws2812_setLED_Column(lColumnCount, lColor[2], lColor[0], lColor[1]);
+                        break;
+                    case 2:
+                        ws2812_setLED_Column(lColumnCount, lColor[1], lColor[2], lColor[0]);
+                        break;
+                }
+            }
+            ws2812_updateLED();
+            lColor[lPatternCount] = 0;
+
+            vTaskDelay(2000);       /* delay 2 seconds */
+        }
+
+
+        /* turn all leds off */
+        ws2812_setLED_All(0, 0, 0);
+        ws2812_updateLED();
+    }
+
+
+
+#if 1
+    {   /* LED test pattern */
+        uint8_t lRed = 0;
+        uint8_t lGreen = 0;
+        uint8_t lBlue = 0;
+        uint8_t lState = 0;
+        for(;;) {
+
+            /* hamilton circle over 3D color cube */
+            switch(lState) {
+                case 7:
+                    // decrement blue
+                    if(lBlue > 0) {
+                        lBlue--;
+                    }
+                    if(lBlue == 0) {
+                        lState++;
+                    }
+                    break;
+                case 6:
+                    // decrement red
+                    if(lRed > 0) {
+                        lRed--;
+                    }
+                    if(lRed == 0) {
+                        lState++;
+                    }
+                    break;
+                case 5:
+                    // decrement green
+                    if(lGreen > 0) {
+                        lGreen--;
+                    }
+                    if(lGreen == 0) {
+                        lState++;
+                    }
+                    break;
+                case 4:
+                    // increment red
+                    if(lRed < 255) {
+                        lRed++;
+                    }
+                    if(lRed == 255) {
+                        lState++;
+                    }
+                    break;
+                case 3:
+                    // Increment Blue
+                    if(lBlue < 255) {
+                        lBlue++;
+                    }
+                    if(lBlue == 255) {
+                        lState++;
+                    }
+                    break;
+                case 2:
+                    // decrement red
+                    if(lRed > 0) {
+                        lRed--;
+                    }
+                    if(lRed == 0) {
+                        lState++;
+                    }
+                    break;
+                case 1:
+                    // increment green
+                    if(lGreen < 255) {
+                        lGreen ++;
+                    }
+                    if(lGreen == 255) {
+                        lState++;
+                    }
+                    break;
+                case 0:
+                    // increment red
+                    if(lRed < 255) {
+                        lRed++;
+                    }
+                    if(lRed == 255) {
+                        lState++;
+                    }
+                    break;
+            }
+
+            ws2812_setLED_All(lRed,lGreen,lBlue);
+            ws2812_updateLED();
+        }
+    }
+#endif
+}
 
 int main(void) {
 
@@ -37,6 +177,16 @@ int main(void) {
     setbuf(stdout, NULL);
 
     ws2812_init();
+
+#if 1
+    {
+        /* Lounch other tasks in init task! */
+        xTaskCreate(led_task, ( const char * )"led", configMINIMAL_STACK_SIZE * 8, NULL, 0, NULL);
+
+        /* Start the scheduler. */
+        vTaskStartScheduler();
+    }
+#endif
 
 #if 0
     for(;;) {
@@ -81,61 +231,84 @@ int main(void) {
 
 #if 0
     {
-        uint8_t lCount = 0;
-        uint8_t lForward = 0;
-        for(;;lCount++) {
-            if(lCount == 0) {
-                lForward = (lForward + 1) & 1;
-            }
-
-            if(lForward) {
-                setAllLED(lCount, lCount, lCount);
-            } else {
-                setAllLED(255-lCount, 255-lCount, 255-lCount);
-            }
-            updateLED();
-        }
-    }
-#endif
-
-#if 1
-    {
         uint8_t lRed = 0;
-        uint8_t lGreen = 255;
+        uint8_t lGreen = 0;
         uint8_t lBlue = 0;
         uint8_t lState = 0;
         for(;;) {
 
+            /* hamilton circle over 3D color cube */
             switch(lState) {
-                case 2:
-                    // increment green, decrement blue
-                    if(lGreen < 255) {
-                        lGreen ++;
-                        lBlue --;
+                case 7:
+                    // decrement blue
+                    if(lBlue > 0) {
+                        lBlue--;
                     }
-                    if(lGreen == 255) {
-                        lState = 0;
+                    if(lBlue == 0) {
+                        lState++;
+                    }
+                    break;
+                case 6:
+                    // decrement red
+                    if(lRed > 0) {
+                        lRed--;
+                    }
+                    if(lRed == 0) {
+                        lState++;
+                    }
+                    break;
+                case 5:
+                    // decrement green
+                    if(lGreen > 0) {
+                        lGreen--;
+                    }
+                    if(lGreen == 0) {
+                        lState++;
+                    }
+                    break;
+                case 4:
+                    // increment red
+                    if(lRed < 255) {
+                        lRed++;
+                    }
+                    if(lRed == 255) {
+                        lState++;
+                    }
+                    break;
+                case 3:
+                    // Increment Blue
+                    if(lBlue < 255) {
+                        lBlue++;
+                    }
+                    if(lBlue == 255) {
+                        lState++;
+                    }
+                    break;
+                case 2:
+                    // decrement red
+                    if(lRed > 0) {
+                        lRed--;
+                    }
+                    if(lRed == 0) {
+                        lState++;
                     }
                     break;
                 case 1:
-                    // increment blue, decrement red
-                    if(lBlue < 255) {
-                        lBlue ++;
-                        lRed --;
+                    // increment green
+                    if(lGreen < 255) {
+                        lGreen ++;
                     }
-                    if(lBlue == 255) {
-                        lState = 2;
+                    if(lGreen == 255) {
+                        lState++;
                     }
                     break;
                 case 0:
-                default:
-                    // increment red, decrement green
+                    // increment red
                     if(lRed < 255) {
                         lRed++;
-                        lGreen--;
                     }
                     if(lRed == 255) {
-                        lState = 1;
+                        lState++;
                     }
                     break;
             }
@@ -146,42 +319,13 @@ int main(void) {
     }
 #endif
 
-#if 0
-    {
-        size_t lLedColumn = 0;
-
-        for(;;) {
-
-            setLED(lLedColumn, 0, 0, 0);
-            lLedColumn = (lLedColumn + 1) % 172;
-            setLED(lLedColumn, 255,255,255);
-            updateLED();
-            updateLED();
-            updateLED();
-            updateLED();
-            updateLED();
-            updateLED();
-            updateLED();
-            updateLED();
-            updateLED();
-            updateLED();
-            updateLED();
-            updateLED();
-            updateLED();
-            updateLED();
-            updateLED();
-            updateLED();
-        }
-
-    }
-
-#endif
-
     return 0;
 }
 
 
+/* initialize usb */
 void init() {
+
     GPIO_InitTypeDef  GPIO_InitStructure;
 
     // ---------- GPIO -------- //

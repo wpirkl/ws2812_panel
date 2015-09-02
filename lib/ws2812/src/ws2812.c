@@ -79,7 +79,7 @@ static inline size_t isLedSkipped(size_t inLedRow, size_t inLedColumn) {
     return 0;
 }
 
-void setLED(size_t inRow, size_t inColumn, uint8_t r, uint8_t g, uint8_t b) {
+void ws2812_setLED(size_t inRow, size_t inColumn, uint8_t r, uint8_t g, uint8_t b) {
 
     assert_param(inRow < NR_ROWS);
     assert_param(inColumn < NR_COLUMNS);
@@ -94,17 +94,27 @@ void setLED(size_t inRow, size_t inColumn, uint8_t r, uint8_t g, uint8_t b) {
     sLedPanel[inRow].mLeds[inColumn].B = b;
 }
 
-void setLED_Color(size_t inRow, size_t inColumn, color *c) {
+void ws2812_setLED_Column(size_t inColumn, uint8_t r, uint8_t g, uint8_t b) {
 
-    assert_param(inRow < NR_ROWS);
-    assert_param(inColumn < NR_COLUMNS);
+    size_t lRowNum = ws2812_getLED_PanelNumberOfRows();
+    size_t lRowCount;
 
-    sLedPanel[inRow].mLeds[inColumn].R = c->R;
-    sLedPanel[inRow].mLeds[inColumn].G = c->G;
-    sLedPanel[inRow].mLeds[inColumn].B = c->B;
+    for(lRowCount = 0; lRowCount < lRowNum; lRowCount++) {
+        ws2812_setLED(lRowCount, inColumn, r, g, b);
+    }
 }
 
-void setAllLED(uint8_t r, uint8_t g, uint8_t b){
+void ws2812_setLED_Row(size_t inRow, uint8_t r, uint8_t g, uint8_t b) {
+
+    size_t lColumnNum = ws2812_getLED_PanelNumberOfColumns();
+    size_t lColumnCount;
+
+    for(lColumnCount = 0; lColumnCount < lColumnNum; lColumnCount++) {
+        ws2812_setLED(inRow, lColumnCount, r, g, b);
+    }
+}
+
+void ws2812_setLED_All(uint8_t r, uint8_t g, uint8_t b){
 
     size_t lRowCount;
     size_t lColumnCount;
@@ -124,22 +134,17 @@ void setAllLED(uint8_t r, uint8_t g, uint8_t b){
     }
 }
 
-void setAllLED_Color(color *c){
-
-    setAllLED(c->R, c->G, c->B);
-}
-
-size_t getLEDPanelNumberOfRows(void) {
+size_t ws2812_getLED_PanelNumberOfRows(void) {
 
     return NR_ROWS;
 }
 
-size_t getLEDPanelNumberOfColumns(void) {
+size_t ws2812_getLED_PanelNumberOfColumns(void) {
 
     return NR_COLUMNS;
 }
 
-void setAllLED_bulk(uint8_t * inBuffer, size_t inOffset, size_t inBufferSize) {
+void ws2812_setLED_bulk(uint8_t * inBuffer, size_t inOffset, size_t inBufferSize) {
 
     assert_param(inOffset < sizeof(sLeds));
     assert_param(inOffset + inBufferSize < sizeof(sLeds));
@@ -364,8 +369,8 @@ void ws2812_init(void) {
     nvic_init.NVIC_IRQChannelCmd = ENABLE;
     NVIC_Init(&nvic_init);
 
-    setAllLED(0,0,0);
-    updateLED();
+    ws2812_setLED_All(0,0,0);
+    ws2812_updateLED();
 }
 
 // start dma on timer 3 ch1
@@ -706,8 +711,7 @@ static inline void fillBuffer(void) {
     dmaBufferIdx = incrementBufferIndex(lDmaBufferIndexCache);
 }
 
-
-void updateLED(void){
+void ws2812_updateLED(void){
 
     /* iterate over all rows */
     for(dmaLedRow = 0; dmaLedRow < NR_ROWS; dmaLedRow++) {

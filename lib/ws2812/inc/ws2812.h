@@ -44,19 +44,39 @@ void ws2812_init(void);
 /*!
     Send the update to the leds
 */
-void updateLED(void);
+void ws2812_updateLED(void);
 
 // ----------------------------- graphics -----------------------------
-void setLED(size_t inRow, size_t inColumn, uint8_t r, uint8_t g, uint8_t b);
+/*!
+    Set a led to a specific color
+
+    \param[in]  inRow       The row index of the led
+    \param[in]  inColumn    The column index of the led
+    \param[in]  r   Red part of the color
+    \param[in]  g   Green part of the color
+    \param[in]  b   Blue part of the color
+*/
+void ws2812_setLED(size_t inRow, size_t inColumn, uint8_t r, uint8_t g, uint8_t b);
 
 /*!
-    Set a pixel to a specific color
+    Set all pixels of one column to a color
 
-    \param[in]  inRow       Row of the pixel
-    \param[in]  inColumn    Column of the pixel
-    \param[in]  c           Color of the pixel
+    \param[in]  inColumn    The column index of the led
+    \param[in]  r   Red part of the color
+    \param[in]  g   Green part of the color
+    \param[in]  b   Blue part of the color
 */
-void setLED_Color(size_t inRow, size_t inColumn, color *c);
+void ws2812_setLED_Column(size_t inColumn, uint8_t r, uint8_t g, uint8_t b);
+
+/*!
+    Set all pixels of one row to a color
+
+    \param[in]  inRow    The row index of the led
+    \param[in]  r   Red part of the color
+    \param[in]  g   Green part of the color
+    \param[in]  b   Blue part of the color
+*/
+void ws2812_setLED_Row(size_t inRow, uint8_t r, uint8_t g, uint8_t b);
 
 /*!
     Set all leds by using a specific rgb color
@@ -65,14 +85,7 @@ void setLED_Color(size_t inRow, size_t inColumn, color *c);
     \param[in]  g   Green part of the color
     \param[in]  b   Blue part of the color
 */
-void setAllLED(uint8_t r, uint8_t g, uint8_t b);
-
-/*!
-    Set all leds by using color c
-
-    \param[in]  c       Color to set
-*/
-void setAllLED_Color(color *c);
+void ws2812_setLED_All(uint8_t r, uint8_t g, uint8_t b);
 
 /*!
     Set all panel in a bulk
@@ -103,21 +116,21 @@ void setAllLED_Color(color *c);
     \param[in]  inOffset        offset into panel data
     \param[in]  inBufferSize    number of bytes to send
 */
-void setAllLED_bulk(uint8_t * inBuffer, size_t inOffset, size_t inBufferSize);
+void ws2812_setLED_bulk(uint8_t * inBuffer, size_t inOffset, size_t inBufferSize);
 
 /*!
     Get the number of leds in one row
 
     \return the number of leds in one row
 */
-size_t getLEDPanelNumberOfRows(void);
+size_t ws2812_getLED_PanelNumberOfRows(void);
 
 /*!
     Get the number of leds in one column
 
     \return the number of leds in one column
 */
-size_t getLEDPanelNumberOfColumns(void);
+size_t ws2812_getLED_PanelNumberOfColumns(void);
 
 
 

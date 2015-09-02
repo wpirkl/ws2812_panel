@@ -36,7 +36,7 @@ LIBS += usbdevcore
 LIBS += usbdevcdc
 LIBS += usbcore
 LIBS += esp8266
-#LIBS += freertos
+LIBS += freertos
 
 LIBPATH_ws2812     = $(LIBPATH)/ws2812
 LIBPATH_stdperiph  = $(LIBPATH)/StdPeriph
@@ -66,21 +66,21 @@ LIB += -lm
 
 ###################################################
 
-.PHONY: clean cleanlib $(LIBS_BUILD) flash
+.PHONY: clean cleanlib $(LIBS_BUILD) flash dirs cleandirs
 
-all: $(OUTPATH)/$(PROJ_NAME).elf $(OUTPATH)
+all: $(OUTPATH)/$(PROJ_NAME).elf
 	$(SIZE) $(OUTPATH)/$(PROJ_NAME).elf
 
 $(LIBS_BUILD): config.mk rules.mk
 	$(MAKE) $(notdir $@) -C $(dir $@)
 
-$(OUTPATH)/$(PROJ_NAME).elf: $(OBJS) $(CPPOBJS) $(LIBS_BUILD) $(OUTPATH)
+$(OUTPATH)/$(PROJ_NAME).elf: $(OBJS) $(CPPOBJS) $(LIBS_BUILD)
 	$(CC) $(CFLAGS) -Tstm32_flash.ld $(OBJS) $(CPPOBJS) $(STARTUP) -o $@ $(SYSLIBS) $(LIB) -Wl,-Map=$(OUTPATH)/$(PROJ_NAME).map
 
-$(OUTPATH)/$(PROJ_NAME).hex: $(OUTPATH)/$(PROJ_NAME).elf $(OUTPATH)
+$(OUTPATH)/$(PROJ_NAME).hex: $(OUTPATH)/$(PROJ_NAME).elf
 	$(OBJCOPY) -O ihex $< $@
 
-$(OUTPATH)/$(PROJ_NAME).bin: $(OUTPATH)/$(PROJ_NAME).elf $(OUTPATH)
+$(OUTPATH)/$(PROJ_NAME).bin: $(OUTPATH)/$(PROJ_NAME).elf
 	$(OBJCOPY) -O binary $< $@
 
 cleanlib:
@@ -91,9 +91,14 @@ clean::
 	rm -f $(OUTPATH)/$(PROJ_NAME).elf
 	rm -f $(OUTPATH)/$(PROJ_NAME).hex
 	rm -f $(OUTPATH)/$(PROJ_NAME).bin
-	rm -f -r $(OUTPATH)
 
 flash: $(OUTPATH)/$(PROJ_NAME).bin
 	$(STLINK) write $< 0x08000000
+
+dirs::
+	$(foreach lib,$(LIBS),$(MAKE) dirs -C $(LIBPATH_$(lib));)
+
+cleandirs::
+	$(foreach lib,$(LIBS),$(MAKE) cleandirs -C $(LIBPATH_$(lib));)
 
 include rules.mk
