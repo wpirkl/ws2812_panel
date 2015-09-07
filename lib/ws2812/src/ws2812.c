@@ -32,6 +32,12 @@ typedef struct {
     ts_skip_leds * mSkip;
 } ts_led_panel;
 
+
+static ts_skip_leds sSkipRow3 = {
+	.mStartIndex = 143,
+	.mSkipLen = 6,
+};
+
 static color sLeds[NR_COLUMNS * NR_ROWS];
 
 static ts_led_panel sLedPanel[NR_ROWS] = {
@@ -47,8 +53,8 @@ static ts_led_panel sLedPanel[NR_ROWS] = {
     },
     {
         .mLeds = &sLeds[2 * NR_COLUMNS],
-        .mSkipCount = 0,
-        .mSkip = NULL
+        .mSkipCount = 1,
+        .mSkip = &sSkipRow3,
     },
     {
         .mLeds = &sLeds[3 * NR_COLUMNS],
@@ -205,7 +211,7 @@ void ws2812_init(void) {
     GPIO_InitStructure.GPIO_OType = GPIO_OType_PP;
     GPIO_InitStructure.GPIO_PuPd = GPIO_PuPd_NOPULL;
     GPIO_InitStructure.GPIO_Speed = GPIO_Speed_100MHz;
-    GPIO_Init(GPIOB, &GPIO_InitStructure);
+    GPIO_Init(GPIOD, &GPIO_InitStructure);
     GPIO_PinAFConfig(GPIOD, GPIO_PinSource12, GPIO_AF_TIM4);
 
     // GPIO B7 - TIM4 CH2

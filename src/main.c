@@ -30,8 +30,10 @@ void led_task(void * inParameters) {
         size_t lColumnNum = ws2812_getLED_PanelNumberOfColumns();
         size_t lColumnCount;
         size_t lPatternCount;
+        size_t lCount;
 
-        uint8_t lColor[3];
+        uint8_t lColor[3] = {0, 0, 0
+        };
 
         for(lPatternCount = 0; lPatternCount < 3; lPatternCount++) {
 
@@ -60,6 +62,30 @@ void led_task(void * inParameters) {
         /* turn all leds off */
         ws2812_setLED_All(0, 0, 0);
         ws2812_updateLED();
+
+        vTaskDelay(1000);
+
+        for(lColumnCount = 0; lColumnCount < lColumnNum; lColumnCount++) {
+            
+            if(lColumnCount > 0) {
+                ws2812_setLED_Column(lColumnCount-1, 0, 0, 0);
+            }
+            ws2812_setLED_Column(lColumnCount, 255, 255, 255);
+            
+            ws2812_updateLED();
+        }
+        ws2812_setLED_Column(lColumnCount-1, 0, 0, 0);
+        ws2812_updateLED();
+        
+        for(lCount = 0, lColumnCount = lColumnNum - 1; lCount < lColumnNum; lCount++, lColumnCount--) {
+            if(lCount > 0) {
+                ws2812_setLED_Column(lColumnCount+1, 0, 0, 0);
+            }
+            ws2812_setLED_Column(lColumnCount, 255, 255, 255);
+            ws2812_updateLED();
+        }
+        ws2812_setLED_Column(0, 0, 0, 0);
+        ws2812_updateLED();
     }
 
 
@@ -74,13 +100,14 @@ void led_task(void * inParameters) {
 
             /* hamilton circle over 3D color cube */
             switch(lState) {
+				default:
                 case 7:
                     // decrement blue
                     if(lBlue > 0) {
                         lBlue--;
                     }
                     if(lBlue == 0) {
-                        lState++;
+                        lState=0;
                     }
                     break;
                 case 6:
