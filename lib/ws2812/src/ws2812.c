@@ -39,8 +39,8 @@
 #define TIM4_CH2_ROW_IDX                (4)
 
 
-// #define WS2812_PARALLEL_ROW
-// #define WS2812_FREERTOS
+#define WS2812_PARALLEL_ROW
+#define WS2812_FREERTOS
 
 
 
@@ -406,7 +406,7 @@ void ws2812_init(void) {
         size_t lRow;
 
         for(lRow = 0; lRow < NR_ROWS; lRow++) {
-            vSemaphoreCreateBinary(sLedDMA[lRow].mDmaDoneSemaphore);
+            sLedDMA[lRow].mDmaDoneSemaphore = xSemaphoreCreateCounting(1, 0);
             assert_param(sLedDMA[lRow].mDmaDoneSemaphore != NULL);
         }
     }
