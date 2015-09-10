@@ -9,23 +9,66 @@
 #include "stm32f4xx_tim.h"
 #include "misc.h"
 
+// ----------------------------- definitions -----------------------------
+#define NR_ROWS         (5)
+#define NR_COLUMNS      (172)
+
+#define SIZE_OF_LED     (24)      // 3(RGB) * 8 Bit
+
+#define WS2812_TIM_FREQ       ((168000000 / 4) * 2)
+#define WS2812_OUT_FREQ       (800000)
+
+// timer values to generate a "one" or a "zero" according to ws2812 datasheet
+#define WS2812_PWM_PERIOD       ((WS2812_TIM_FREQ / WS2812_OUT_FREQ))
+#define WS2812_PWM_ZERO         (29)  // 0.5 µs of 2.5µs is high => 1/5 of the period
+#define WS2812_PWM_ONE          (58) // 2µs of 2.5µs is high -> 4/5 of the period
+
+
+// number of timer cycles (~2.5µs) for the reset pulse
+#define WS2812_RESET_LEN        (20) //20*2.5µs = 50µs
+
 /* buffer size for double buffer */
 #define DMA_DOUBLE_BUFFER_NUM_LEDS      (2)
 #define DMA_DOUBLE_BUFFER_SIZE          (DMA_DOUBLE_BUFFER_NUM_LEDS * SIZE_OF_LED)
+#define DMA_DOUBLE_BUFFER_ROW_SIZE      (2 * DMA_DOUBLE_BUFFER_SIZE)
 
-static uint16_t dmaBuffer[2 * DMA_DOUBLE_BUFFER_SIZE];      /* non concurrent access from ISR and from thread */
-static volatile uint8_t  dmaBufferIdx = 0;                  /* changed from ISR and thread which could lead to an optimisation issue, defines which DMA buffer to fill */
-static volatile size_t   dmaLedIdx = 0;                     /* changed from ISR and thread which could lead to an optimisation issue, indicates which led to process next */
-static volatile bool     dmaLast = false;                   /* changed from ISR and thread which could lead to an optimisation issue, flag last DMA */
-static volatile bool     dmaDone = false;                   /* changed from ISR, thread is polling, flag dma done */
+#define TIM3_CH1_ROW_IDX                (0)
+#define TIM3_CH3_ROW_IDX                (2)
+#define TIM3_CH4_ROW_IDX                (3)
+#define TIM4_CH1_ROW_IDX                (1)
+#define TIM4_CH2_ROW_IDX                (4)
 
-static size_t   dmaLedRow = 0;
 
+// #define WS2812_PARALLEL_ROW
+// #define WS2812_FREERTOS
+
+
+
+#if defined(WS2812_FREERTOS)
+#include "FreeRTOS.h"
+#include "semphr.h"
+#endif
+
+/*! Internal structure of a led row */
+typedef struct {
+    uint16_t             mDmaBuffer[DMA_DOUBLE_BUFFER_ROW_SIZE];
+    volatile size_t      mDmaBufferIndex;
+    volatile size_t      mDmaColumnIndex;
+    volatile bool        mDmaLast;
+#if defined(WS2812_FREERTOS)
+    SemaphoreHandle_t   mDmaDoneSemaphore;
+#else /* WS2812_FREERTOS */
+    volatile bool        mDmaDone;
+#endif /* WS2812_FREERTOS */
+} ts_update_row;
+
+/*! Structure defining skipped leds */
 typedef struct {
     size_t      mStartIndex;
     size_t      mSkipLen;
 } ts_skip_leds;
 
+/*! Structure defining one row */
 typedef struct {
     color        * mLeds;
     size_t         mSkipCount;
@@ -34,8 +77,8 @@ typedef struct {
 
 
 static ts_skip_leds sSkipRow3 = {
-	.mStartIndex = 143,
-	.mSkipLen = 6,
+    .mStartIndex = 143,
+    .mSkipLen = 6,
 };
 
 static color sLeds[NR_COLUMNS * NR_ROWS];
@@ -68,6 +111,16 @@ static ts_led_panel sLedPanel[NR_ROWS] = {
     },
 };
 
+static ts_update_row sLedDMA[NR_ROWS];
+
+/*!
+    Check if a led is skipped
+
+    \param[in]  inLedRow    The row index of the LED
+    \param[in]  inLedColumn The column index of the LED
+
+    \retval the number of leds to be skipped
+*/
 static inline size_t isLedSkipped(size_t inLedRow, size_t inLedColumn) {
 
     size_t lCount;
@@ -178,15 +231,6 @@ void ws2812_init(void) {
     GPIO_Init(GPIOC, &GPIO_InitStructure);
     GPIO_PinAFConfig(GPIOC, GPIO_PinSource6, GPIO_AF_TIM3);
 
-    // GPIO B5 - TIM3 CH2
-    // GPIO_InitStructure.GPIO_Pin = GPIO_Pin_5;
-    // GPIO_InitStructure.GPIO_Mode = GPIO_Mode_AF;
-    // GPIO_InitStructure.GPIO_OType = GPIO_OType_PP;
-    // GPIO_InitStructure.GPIO_PuPd = GPIO_PuPd_NOPULL;
-    // GPIO_InitStructure.GPIO_Speed = GPIO_Speed_100MHz;
-    // GPIO_Init(GPIOB, &GPIO_InitStructure);
-    // GPIO_PinAFConfig(GPIOB, GPIO_PinSource5, GPIO_AF_TIM3);
-
     // GPIO B0 - TIM3 CH3
     GPIO_InitStructure.GPIO_Pin = GPIO_Pin_0;
     GPIO_InitStructure.GPIO_Mode = GPIO_Mode_AF;
@@ -250,9 +294,6 @@ void ws2812_init(void) {
     timocinit.TIM_Pulse = 0;
     TIM_OC1Init(TIM3, &timocinit);
 
-    // Timer 3 - Channel 2
-    // TIM_OC2Init(TIM3, &timocinit);
-
     // Timer 3 - Channel 3
     TIM_OC3Init(TIM3, &timocinit);
 
@@ -267,9 +308,6 @@ void ws2812_init(void) {
 
     // Timer 3 - Channel 1
     TIM_OC1PreloadConfig(TIM3, TIM_OCPreload_Enable);
-
-    // Timer 3 - Channel 2
-    // TIM_OC2PreloadConfig(TIM3, TIM_OCPreload_Enable);
 
     // Timer 3 - Channel 3
     TIM_OC3PreloadConfig(TIM3, TIM_OCPreload_Enable);
@@ -291,7 +329,6 @@ void ws2812_init(void) {
 
     // Timer 3 Enable
     TIM_CCxCmd(TIM3, TIM_Channel_1, TIM_CCx_Enable);
-//    TIM_CCxCmd(TIM3, TIM_Channel_2, TIM_CCx_Enable);
     TIM_CCxCmd(TIM3, TIM_Channel_3, TIM_CCx_Enable);
     TIM_CCxCmd(TIM3, TIM_Channel_4, TIM_CCx_Enable);
     TIM_Cmd(TIM3, ENABLE);
@@ -306,7 +343,6 @@ void ws2812_init(void) {
 
     // Timer3 DMA
     TIM_DMACmd(TIM3, TIM_DMA_CC1, ENABLE);
-//    TIM_DMACmd(TIM3, TIM_DMA_CC2, ENABLE);
     TIM_DMACmd(TIM3, TIM_DMA_CC3, ENABLE);
     TIM_DMACmd(TIM3, TIM_DMA_CC4, ENABLE);
 
@@ -316,9 +352,6 @@ void ws2812_init(void) {
 
     // Tim3 CH1
     DMA_ITConfig(DMA1_Stream4, DMA_IT_TC, ENABLE);
-
-    // Tim3 CH2
-//    DMA_ITConfig(DMA1_Stream5, DMA_IT_TC, ENABLE);
 
     // Tim3 CH3
     DMA_ITConfig(DMA1_Stream7, DMA_IT_TC, ENABLE);
@@ -339,13 +372,6 @@ void ws2812_init(void) {
     nvic_init.NVIC_IRQChannelSubPriority = 0;
     nvic_init.NVIC_IRQChannelCmd = ENABLE;
     NVIC_Init(&nvic_init);
-
-    // NVIC for DMA - Tim3 Ch2
-    // nvic_init.NVIC_IRQChannel = DMA1_Stream5_IRQn;
-    // nvic_init.NVIC_IRQChannelPreemptionPriority = 7;
-    // nvic_init.NVIC_IRQChannelSubPriority = 0;
-    // nvic_init.NVIC_IRQChannelCmd = ENABLE;
-    // NVIC_Init(&nvic_init);
 
     // NVIC for DMA - Tim3 Ch3
     nvic_init.NVIC_IRQChannel = DMA1_Stream7_IRQn;
@@ -375,11 +401,22 @@ void ws2812_init(void) {
     nvic_init.NVIC_IRQChannelCmd = ENABLE;
     NVIC_Init(&nvic_init);
 
+#if defined(WS2812_FREERTOS)
+    {
+        size_t lRow;
+
+        for(lRow = 0; lRow < NR_ROWS; lRow++) {
+            vSemaphoreCreateBinary(sLedDMA[lRow].mDmaDoneSemaphore);
+            assert_param(sLedDMA[lRow].mDmaDoneSemaphore != NULL);
+        }
+    }
+#endif
+
     ws2812_setLED_All(0,0,0);
     ws2812_updateLED();
 }
 
-// start dma on timer 3 ch1
+/*! start dma on timer 3 ch1 */
 static void start_dma_t3_ch1(void) {
     /* static const makes the linker put it to text section */
     static const DMA_InitTypeDef dma_init =
@@ -389,7 +426,7 @@ static void start_dma_t3_ch1(void) {
         .DMA_DIR                  = DMA_DIR_MemoryToPeripheral,         /* from memory to timer */
         .DMA_FIFOMode             = DMA_FIFOMode_Disable,               /* no fifo mode */
         .DMA_FIFOThreshold        = DMA_FIFOThreshold_HalfFull,         /* unused */
-        .DMA_Memory0BaseAddr      = (uint32_t) &dmaBuffer[0],           /* first double buffer */
+        .DMA_Memory0BaseAddr      = (uint32_t) &sLedDMA[TIM3_CH1_ROW_IDX].mDmaBuffer[0],   /* first double buffer */
         .DMA_MemoryBurst          = DMA_MemoryBurst_Single,             /* no burst */
         .DMA_MemoryDataSize       = DMA_MemoryDataSize_HalfWord,        /* 16 bit */
         .DMA_MemoryInc            = DMA_MemoryInc_Enable,               /* increment memory address */
@@ -405,7 +442,7 @@ static void start_dma_t3_ch1(void) {
     DMA_Init(DMA1_Stream4, &dma_init);
 
     /* start with double buffer 0 */
-    DMA_DoubleBufferModeConfig(DMA1_Stream4, (uint32_t)&dmaBuffer[DMA_DOUBLE_BUFFER_SIZE], DMA_Memory_0);
+    DMA_DoubleBufferModeConfig(DMA1_Stream4, (uint32_t)&sLedDMA[TIM3_CH1_ROW_IDX].mDmaBuffer[DMA_DOUBLE_BUFFER_SIZE], DMA_Memory_0);
 
     /* enable double buffering */
     DMA_DoubleBufferModeCmd(DMA1_Stream4, ENABLE);
@@ -417,46 +454,7 @@ static void start_dma_t3_ch1(void) {
     TIM_DMACmd(TIM3, TIM_DMA_CC1, ENABLE);
 }
 
-// start dma on timer 3 ch2
-// void start_dma_t3_ch2(void)
-// {
-    // /* static const makes the linker put it to text section */
-    // static const DMA_InitTypeDef dma_init =
-    // {
-        // .DMA_BufferSize           = DMA_DOUBLE_BUFFER_SIZE,             /* set size of one buffer of double buffer */
-        // .DMA_Channel              = DMA_Channel_5,                      /* DMA channel 5 */
-        // .DMA_DIR                  = DMA_DIR_MemoryToPeripheral,         /* from memory to timer */
-        // .DMA_FIFOMode             = DMA_FIFOMode_Disable,               /* no fifo mode */
-        // .DMA_FIFOThreshold        = DMA_FIFOThreshold_HalfFull,         /* unused */
-        // .DMA_Memory0BaseAddr      = (uint32_t) &dmaBuffer[0],           /* first double buffer */
-        // .DMA_MemoryBurst          = DMA_MemoryBurst_Single,             /* no burst */
-        // .DMA_MemoryDataSize       = DMA_MemoryDataSize_HalfWord,        /* 16 bit */
-        // .DMA_MemoryInc            = DMA_MemoryInc_Enable,               /* increment memory address */
-        // .DMA_Mode                 = DMA_Mode_Circular,                  /* circular for double buffering */
-        // .DMA_PeripheralBaseAddr   = (uint32_t) &TIM3->CCR2,             /* timer capture compare register */
-        // .DMA_PeripheralBurst      = DMA_PeripheralBurst_Single,         /* no burst */
-        // .DMA_PeripheralDataSize   = DMA_PeripheralDataSize_HalfWord,    /* 16 bit */
-        // .DMA_PeripheralInc        = DMA_PeripheralInc_Disable,          /* no increment */
-        // .DMA_Priority             = DMA_Priority_High                   /* high priority */
-    // };
-
-    // /* initialize dma */
-    // DMA_Init(DMA1_Stream5, &dma_init);
-
-    // /* start with double buffer 0 */
-    // DMA_DoubleBufferModeConfig(DMA1_Stream5, (uint32_t)&dmaBuffer[DMA_DOUBLE_BUFFER_SIZE], DMA_Memory_0);
-
-    // /* enable double buffering */
-    // DMA_DoubleBufferModeCmd(DMA1_Stream5, ENABLE);
-
-    // /* enable dma */
-    // DMA_Cmd(DMA1_Stream5, ENABLE);
-
-    // /* enable timer */
-    // TIM_DMACmd(TIM3, TIM_DMA_CC2, ENABLE);
-// }
-
-// start dma on timer 3 ch3
+/*! start dma on timer 3 ch3 */
 static void start_dma_t3_ch3(void) {
 
     /* static const makes the linker put it to text section */
@@ -467,7 +465,7 @@ static void start_dma_t3_ch3(void) {
         .DMA_DIR                  = DMA_DIR_MemoryToPeripheral,         /* from memory to timer */
         .DMA_FIFOMode             = DMA_FIFOMode_Disable,               /* no fifo mode */
         .DMA_FIFOThreshold        = DMA_FIFOThreshold_HalfFull,         /* unused */
-        .DMA_Memory0BaseAddr      = (uint32_t) &dmaBuffer[0],           /* first double buffer */
+        .DMA_Memory0BaseAddr      = (uint32_t) &sLedDMA[TIM3_CH3_ROW_IDX].mDmaBuffer[0],           /* first double buffer */
         .DMA_MemoryBurst          = DMA_MemoryBurst_Single,             /* no burst */
         .DMA_MemoryDataSize       = DMA_MemoryDataSize_HalfWord,        /* 16 bit */
         .DMA_MemoryInc            = DMA_MemoryInc_Enable,               /* increment memory address */
@@ -483,7 +481,7 @@ static void start_dma_t3_ch3(void) {
     DMA_Init(DMA1_Stream7, &dma_init);
 
     /* start with double buffer 0 */
-    DMA_DoubleBufferModeConfig(DMA1_Stream7, (uint32_t)&dmaBuffer[DMA_DOUBLE_BUFFER_SIZE], DMA_Memory_0);
+    DMA_DoubleBufferModeConfig(DMA1_Stream7, (uint32_t)&sLedDMA[TIM3_CH3_ROW_IDX].mDmaBuffer[DMA_DOUBLE_BUFFER_SIZE], DMA_Memory_0);
 
     /* enable double buffering */
     DMA_DoubleBufferModeCmd(DMA1_Stream7, ENABLE);
@@ -495,7 +493,7 @@ static void start_dma_t3_ch3(void) {
     TIM_DMACmd(TIM3, TIM_DMA_CC3, ENABLE);
 }
 
-// start dma on timer 3 ch4
+/*! start dma on timer 3 ch4 */
 static void start_dma_t3_ch4(void) {
 
     /* static const makes the linker put it to text section */
@@ -506,7 +504,7 @@ static void start_dma_t3_ch4(void) {
         .DMA_DIR                  = DMA_DIR_MemoryToPeripheral,         /* from memory to timer */
         .DMA_FIFOMode             = DMA_FIFOMode_Disable,               /* no fifo mode */
         .DMA_FIFOThreshold        = DMA_FIFOThreshold_HalfFull,         /* unused */
-        .DMA_Memory0BaseAddr      = (uint32_t) &dmaBuffer[0],           /* first double buffer */
+        .DMA_Memory0BaseAddr      = (uint32_t) &sLedDMA[TIM3_CH4_ROW_IDX].mDmaBuffer[0],           /* first double buffer */
         .DMA_MemoryBurst          = DMA_MemoryBurst_Single,             /* no burst */
         .DMA_MemoryDataSize       = DMA_MemoryDataSize_HalfWord,        /* 16 bit */
         .DMA_MemoryInc            = DMA_MemoryInc_Enable,               /* increment memory address */
@@ -522,7 +520,7 @@ static void start_dma_t3_ch4(void) {
     DMA_Init(DMA1_Stream2, &dma_init);
 
     /* start with double buffer 0 */
-    DMA_DoubleBufferModeConfig(DMA1_Stream2, (uint32_t)&dmaBuffer[DMA_DOUBLE_BUFFER_SIZE], DMA_Memory_0);
+    DMA_DoubleBufferModeConfig(DMA1_Stream2, (uint32_t)&sLedDMA[TIM3_CH4_ROW_IDX].mDmaBuffer[DMA_DOUBLE_BUFFER_SIZE], DMA_Memory_0);
 
     /* enable double buffering */
     DMA_DoubleBufferModeCmd(DMA1_Stream2, ENABLE);
@@ -534,7 +532,7 @@ static void start_dma_t3_ch4(void) {
     TIM_DMACmd(TIM3, TIM_DMA_CC4, ENABLE);
 }
 
-// start dma on timer 4 ch1
+/*! start dma on timer 4 ch1 */
 static void start_dma_t4_ch1(void) {
 
     /* static const makes the linker put it to text section */
@@ -545,7 +543,7 @@ static void start_dma_t4_ch1(void) {
         .DMA_DIR                  = DMA_DIR_MemoryToPeripheral,         /* from memory to timer */
         .DMA_FIFOMode             = DMA_FIFOMode_Disable,               /* no fifo mode */
         .DMA_FIFOThreshold        = DMA_FIFOThreshold_HalfFull,         /* unused */
-        .DMA_Memory0BaseAddr      = (uint32_t) &dmaBuffer[0],           /* first double buffer */
+        .DMA_Memory0BaseAddr      = (uint32_t) &sLedDMA[TIM4_CH1_ROW_IDX].mDmaBuffer[0],           /* first double buffer */
         .DMA_MemoryBurst          = DMA_MemoryBurst_Single,             /* no burst */
         .DMA_MemoryDataSize       = DMA_MemoryDataSize_HalfWord,        /* 16 bit */
         .DMA_MemoryInc            = DMA_MemoryInc_Enable,               /* increment memory address */
@@ -561,7 +559,7 @@ static void start_dma_t4_ch1(void) {
     DMA_Init(DMA1_Stream0, &dma_init);
 
     /* start with double buffer 0 */
-    DMA_DoubleBufferModeConfig(DMA1_Stream0, (uint32_t)&dmaBuffer[DMA_DOUBLE_BUFFER_SIZE], DMA_Memory_0);
+    DMA_DoubleBufferModeConfig(DMA1_Stream0, (uint32_t)&sLedDMA[TIM4_CH1_ROW_IDX].mDmaBuffer[DMA_DOUBLE_BUFFER_SIZE], DMA_Memory_0);
 
     /* enable double buffering */
     DMA_DoubleBufferModeCmd(DMA1_Stream0, ENABLE);
@@ -573,7 +571,7 @@ static void start_dma_t4_ch1(void) {
     TIM_DMACmd(TIM4, TIM_DMA_CC1, ENABLE);
 }
 
-// start dma on timer 4 ch2
+/*! start dma on timer 4 ch2 */
 static void start_dma_t4_ch2(void) {
 
     /* static const makes the linker put it to text section */
@@ -584,7 +582,7 @@ static void start_dma_t4_ch2(void) {
         .DMA_DIR                  = DMA_DIR_MemoryToPeripheral,         /* from memory to timer */
         .DMA_FIFOMode             = DMA_FIFOMode_Disable,               /* no fifo mode */
         .DMA_FIFOThreshold        = DMA_FIFOThreshold_HalfFull,         /* unused */
-        .DMA_Memory0BaseAddr      = (uint32_t) &dmaBuffer[0],           /* first double buffer */
+        .DMA_Memory0BaseAddr      = (uint32_t) &sLedDMA[TIM4_CH2_ROW_IDX].mDmaBuffer[0],           /* first double buffer */
         .DMA_MemoryBurst          = DMA_MemoryBurst_Single,             /* no burst */
         .DMA_MemoryDataSize       = DMA_MemoryDataSize_HalfWord,        /* 16 bit */
         .DMA_MemoryInc            = DMA_MemoryInc_Enable,               /* increment memory address */
@@ -600,7 +598,7 @@ static void start_dma_t4_ch2(void) {
     DMA_Init(DMA1_Stream3, &dma_init);
 
     /* start with double buffer 0 */
-    DMA_DoubleBufferModeConfig(DMA1_Stream3, (uint32_t)&dmaBuffer[DMA_DOUBLE_BUFFER_SIZE], DMA_Memory_0);
+    DMA_DoubleBufferModeConfig(DMA1_Stream3, (uint32_t)&sLedDMA[TIM4_CH2_ROW_IDX].mDmaBuffer[DMA_DOUBLE_BUFFER_SIZE], DMA_Memory_0);
 
     /* enable double buffering */
     DMA_DoubleBufferModeCmd(DMA1_Stream3, ENABLE);
@@ -615,10 +613,9 @@ static void start_dma_t4_ch2(void) {
 
 typedef void (*f_start_dma)(void);
 
-/* Function pointers to simplify launching of dmas */
+/*! Function pointers to simplify launching of dmas */
 static f_start_dma s_start_dma_funcs[NR_ROWS] = {
     start_dma_t3_ch1,
-//    start_dma_t3_ch2,
     start_dma_t4_ch1,
     start_dma_t3_ch3,
     start_dma_t3_ch4,
@@ -628,11 +625,11 @@ static f_start_dma s_start_dma_funcs[NR_ROWS] = {
 /*!
     Call a specific start dma function
 */
-static void start_dma() {
+static void start_dma(size_t inRow) {
 
-    assert_param(dmaLedRow < NR_ROWS);
+    assert_param(inRow < NR_ROWS);
 
-    s_start_dma_funcs[dmaLedRow]();
+    s_start_dma_funcs[inRow]();
 }
 
 /*!
@@ -647,28 +644,29 @@ static inline size_t incrementBufferIndex(size_t inBufferIndex) {
 
     It is absolutely neccessary to finish this before the dma can complete the second double buffer
 */
-static inline void fillBuffer(void) {
+static inline void fillBuffer(size_t inRow) {
 
     size_t lCount;
     size_t lBitMask;
     size_t lBitIndex;
     size_t lIndex;
 
-    /* avoid access to volatile variables */
-    size_t lDmaBufferIndexCache = dmaBufferIdx;
-    size_t lDmaLedRow = dmaLedRow;
+    assert_param(inRow < NR_ROWS);
 
-    uint16_t * lGreenPtr = &dmaBuffer[lDmaBufferIndexCache * DMA_DOUBLE_BUFFER_SIZE];
-    uint16_t * lRedPtr   = &dmaBuffer[lDmaBufferIndexCache * DMA_DOUBLE_BUFFER_SIZE +  8];
-    uint16_t * lBluePtr  = &dmaBuffer[lDmaBufferIndexCache * DMA_DOUBLE_BUFFER_SIZE + 16];
+    /* avoid access to volatile variables */
+    size_t lDmaBufferIndexCache = sLedDMA[inRow].mDmaBufferIndex;
+
+    uint16_t * lGreenPtr = &sLedDMA[inRow].mDmaBuffer[lDmaBufferIndexCache * DMA_DOUBLE_BUFFER_SIZE];
+    uint16_t * lRedPtr   = &sLedDMA[inRow].mDmaBuffer[lDmaBufferIndexCache * DMA_DOUBLE_BUFFER_SIZE +  8];
+    uint16_t * lBluePtr  = &sLedDMA[inRow].mDmaBuffer[lDmaBufferIndexCache * DMA_DOUBLE_BUFFER_SIZE + 16];
 
     /* fill whole buffer */
     for(lCount = 0; lCount < DMA_DOUBLE_BUFFER_NUM_LEDS; lCount++) {
 
-        lIndex = dmaLedIdx;
+        lIndex = sLedDMA[inRow].mDmaColumnIndex;
 
         /* skip leds which are marked 'not present' */
-        lIndex += isLedSkipped(lDmaLedRow, lIndex);
+        lIndex += isLedSkipped(inRow, lIndex);
 
         /* check if index is still in range */
         if(lIndex < NR_COLUMNS) {
@@ -676,19 +674,19 @@ static inline void fillBuffer(void) {
             /* decode colors to pwm duty cycles */
             for(lBitMask = 0x80, lBitIndex = 0; lBitMask != 0; lBitMask >>= 1, lBitIndex++) {
 
-                if((sLedPanel[lDmaLedRow].mLeds[lIndex].R & lBitMask) != 0) {
+                if((sLedPanel[inRow].mLeds[lIndex].R & lBitMask) != 0) {
                     lRedPtr[lBitIndex] = WS2812_PWM_ONE;
                 } else {
                     lRedPtr[lBitIndex] = WS2812_PWM_ZERO;
                 }
 
-                if((sLedPanel[lDmaLedRow].mLeds[lIndex].G & lBitMask) != 0) {
+                if((sLedPanel[inRow].mLeds[lIndex].G & lBitMask) != 0) {
                     lGreenPtr[lBitIndex] = WS2812_PWM_ONE;
                 } else {
                     lGreenPtr[lBitIndex] = WS2812_PWM_ZERO;
                 }
 
-                if((sLedPanel[lDmaLedRow].mLeds[lIndex].B & lBitMask) != 0) {
+                if((sLedPanel[inRow].mLeds[lIndex].B & lBitMask) != 0) {
                     lBluePtr[lBitIndex] = WS2812_PWM_ONE;
                 } else {
                     lBluePtr[lBitIndex] = WS2812_PWM_ZERO;
@@ -711,183 +709,223 @@ static inline void fillBuffer(void) {
         lBluePtr  += SIZE_OF_LED;
 
         /* next led */
-        dmaLedIdx = lIndex + 1;
+        sLedDMA[inRow].mDmaColumnIndex = lIndex + 1;
     }
 
-    dmaBufferIdx = incrementBufferIndex(lDmaBufferIndexCache);
+    sLedDMA[inRow].mDmaBufferIndex = incrementBufferIndex(lDmaBufferIndexCache);
 }
 
 void ws2812_updateLED(void){
 
+    size_t lRow;
+
     /* iterate over all rows */
-    for(dmaLedRow = 0; dmaLedRow < NR_ROWS; dmaLedRow++) {
+    for(lRow = 0; lRow < NR_ROWS; lRow++) {
 
         /* initialize global variables */
-        dmaBufferIdx = 0;
-        dmaLedIdx = 0;
-        dmaDone = false;
-        dmaLast = false;
+        sLedDMA[lRow].mDmaBufferIndex = 0;
+        sLedDMA[lRow].mDmaColumnIndex = 0;
+        sLedDMA[lRow].mDmaLast = false;
+#if !defined(WS2812_FREERTOS)
+        sLedDMA[lRow].mDmaDone = false;
+#endif
 
         /* fill memory 0 */
-        fillBuffer();
+        fillBuffer(lRow);
 
         /* fill memory 1 */
-        fillBuffer();
+        fillBuffer(lRow);
 
         /* start dma transfer */
-        start_dma();
+        start_dma(lRow);
 
+#if !defined(WS2812_PARALLEL_ROW)
+#if defined(WS2812_FREERTOS)
+        /* wait on semaphore */
+        xSemaphoreTake(sLedDMA[lRow].mDmaDoneSemaphore, portMAX_DELAY);
+#else /* WS2812_FREERTOS */
         /* wait for DMA done */
-        for(;!dmaDone;);
+        for(;!sLedDMA[lRow].mDmaDone;);
+#endif /* WS2812_FREERTOS */
+#endif /* WS2812_PARALLEL_ROW */
     }
+
+#if defined(WS2812_PARALLEL_ROW)
+    for(lRow = 0; lRow < NR_ROWS; lRow++) {
+#if defined(WS2812_FREERTOS)
+        /* wait on semaphore */
+        xSemaphoreTake(sLedDMA[lRow].mDmaDoneSemaphore, portMAX_DELAY);
+#else /* WS2812_FREERTOS */
+        /* wait for DMA done */
+        for(;!sLedDMA[lRow].mDmaDone;);
+#endif /* WS2812_FREERTOS */
+    }
+#endif /* WS2812_PARALLEL_ROW */
 }
 
-static inline bool checkLastIndex(void) {
+/*! Check if DMA tranmitted the last leds of a specific row */
+static inline bool checkLastIndex(size_t inRow) {
 
     /* +2 adds 2*3*24 bits which corresponds to the end frame ~50us */
-    return dmaLedIdx > (NR_COLUMNS + 2);
+    return sLedDMA[inRow].mDmaColumnIndex > (NR_COLUMNS + 2);
 }
 
-// Handler for Tim3 CH1 DMA
+/*! Handler for Tim3 CH1 DMA */
 void DMA1_Stream4_IRQHandler(void) {
 
     if(DMA_GetITStatus(DMA1_Stream4, DMA_IT_TCIF4)) {
         DMA_ClearITPendingBit(DMA1_Stream4, DMA_IT_TCIF4);
 
-        if(dmaLast) {
+        if(sLedDMA[TIM3_CH1_ROW_IDX].mDmaLast) {
             /* disable dma */
             DMA_Cmd(DMA1_Stream4, DISABLE);
 
             /* disable timer */
             TIM_DMACmd(TIM3, TIM_DMA_CC1, DISABLE);
 
-            dmaDone = true;
+#if defined(WS2812_FREERTOS)
+            {
+                BaseType_t xHigherPriorityTaskWoken = pdFALSE;
+                xSemaphoreGiveFromISR(sLedDMA[TIM3_CH1_ROW_IDX].mDmaDoneSemaphore, &xHigherPriorityTaskWoken);
+                portEND_SWITCHING_ISR(xHigherPriorityTaskWoken);
+            }
+#else /* WS2812_FREERTOS */
+            sLedDMA[TIM3_CH1_ROW_IDX].mDmaDone = true;
+#endif /* WS2812_FREERTOS */
         } else {
 
             /* fill next buffer */
-            fillBuffer();
+            fillBuffer(TIM3_CH1_ROW_IDX);
 
-            dmaLast = checkLastIndex();
+            sLedDMA[TIM3_CH1_ROW_IDX].mDmaLast = checkLastIndex(TIM3_CH1_ROW_IDX);
         }
     }
 }
 
-// Handler for Tim3 CH2 DMA
-// void DMA1_Stream5_IRQHandler(void) {
-
-    // if(DMA_GetITStatus(DMA1_Stream5, DMA_IT_TCIF5)) {
-        // DMA_ClearITPendingBit(DMA1_Stream5, DMA_IT_TCIF5);
-
-        // if(dmaLast) {
-            // /* disable dma */
-            // DMA_Cmd(DMA1_Stream5, DISABLE);
-
-            // /* disable timer */
-            // TIM_DMACmd(TIM3, TIM_DMA_CC2, DISABLE);
-
-            // dmaDone = true;
-        // } else {
-
-            // /* fill next buffer */
-            // fillBuffer();
-
-            // dmaLast = checkLastIndex();
-        // }
-    // }
-// }
-
-// Handler for Tim3 CH3 DMA
+/*! Handler for Tim3 CH3 DMA */
 void DMA1_Stream7_IRQHandler(void) {
 
     if(DMA_GetITStatus(DMA1_Stream7, DMA_IT_TCIF7)) {
         DMA_ClearITPendingBit(DMA1_Stream7, DMA_IT_TCIF7);
 
-        if(dmaLast) {
+        if(sLedDMA[TIM3_CH3_ROW_IDX].mDmaLast) {
             /* disable dma */
             DMA_Cmd(DMA1_Stream7, DISABLE);
 
             /* disable timer */
             TIM_DMACmd(TIM3, TIM_DMA_CC3, DISABLE);
 
-            dmaDone = true;
+#if defined(WS2812_FREERTOS)
+            {
+                BaseType_t xHigherPriorityTaskWoken = pdFALSE;
+                xSemaphoreGiveFromISR(sLedDMA[TIM3_CH3_ROW_IDX].mDmaDoneSemaphore, &xHigherPriorityTaskWoken);
+                portEND_SWITCHING_ISR(xHigherPriorityTaskWoken);
+            }
+#else /* WS2812_FREERTOS */
+            sLedDMA[TIM3_CH3_ROW_IDX].mDmaDone = true;
+#endif /* WS2812_FREERTOS */
         } else {
 
             /* fill next buffer */
-            fillBuffer();
+            fillBuffer(TIM3_CH3_ROW_IDX);
 
-            dmaLast = checkLastIndex();
+            sLedDMA[TIM3_CH3_ROW_IDX].mDmaLast = checkLastIndex(TIM3_CH3_ROW_IDX);
         }
     }
 }
 
-// Handler for Tim3 CH4 DMA
+/*! Handler for Tim3 CH4 DMA */
 void DMA1_Stream2_IRQHandler(void) {
 
     if(DMA_GetITStatus(DMA1_Stream2, DMA_IT_TCIF2)) {
         DMA_ClearITPendingBit(DMA1_Stream2, DMA_IT_TCIF2);
 
-        if(dmaLast) {
+        if(sLedDMA[TIM3_CH4_ROW_IDX].mDmaLast) {
             /* disable dma */
             DMA_Cmd(DMA1_Stream2, DISABLE);
 
             /* disable timer */
             TIM_DMACmd(TIM3, TIM_DMA_CC4, DISABLE);
 
-            dmaDone = true;
+#if defined(WS2812_FREERTOS)
+            {
+                BaseType_t xHigherPriorityTaskWoken = pdFALSE;
+                xSemaphoreGiveFromISR(sLedDMA[TIM3_CH4_ROW_IDX].mDmaDoneSemaphore, &xHigherPriorityTaskWoken);
+                portEND_SWITCHING_ISR(xHigherPriorityTaskWoken);
+            }
+#else /* WS2812_FREERTOS */
+            sLedDMA[TIM3_CH4_ROW_IDX].mDmaDone = true;
+#endif /* WS2812_FREERTOS */
         } else {
 
             /* fill next buffer */
-            fillBuffer();
+            fillBuffer(TIM3_CH4_ROW_IDX);
 
-            dmaLast = checkLastIndex();
+            sLedDMA[TIM3_CH4_ROW_IDX].mDmaLast = checkLastIndex(TIM3_CH4_ROW_IDX);
         }
     }
 }
 
-// Handler for Tim4 CH1 DMA
+/*! Handler for Tim4 CH1 DMA */
 void DMA1_Stream0_IRQHandler(void) {
 
     if(DMA_GetITStatus(DMA1_Stream0, DMA_IT_TCIF0)) {
         DMA_ClearITPendingBit(DMA1_Stream0, DMA_IT_TCIF0);
 
-        if(dmaLast) {
+        if(sLedDMA[TIM4_CH1_ROW_IDX].mDmaLast) {
             /* disable dma */
             DMA_Cmd(DMA1_Stream0, DISABLE);
 
             /* disable timer */
             TIM_DMACmd(TIM4, TIM_DMA_CC1, DISABLE);
 
-            dmaDone = true;
+#if defined(WS2812_FREERTOS)
+            {
+                BaseType_t xHigherPriorityTaskWoken = pdFALSE;
+                xSemaphoreGiveFromISR(sLedDMA[TIM4_CH1_ROW_IDX].mDmaDoneSemaphore, &xHigherPriorityTaskWoken);
+                portEND_SWITCHING_ISR(xHigherPriorityTaskWoken);
+            }
+#else /* WS2812_FREERTOS */
+            sLedDMA[TIM4_CH1_ROW_IDX].mDmaDone = true;
+#endif /* WS2812_FREERTOS */
         } else {
 
             /* fill next buffer */
-            fillBuffer();
+            fillBuffer(TIM4_CH1_ROW_IDX);
 
-            dmaLast = checkLastIndex();
+            sLedDMA[TIM4_CH1_ROW_IDX].mDmaLast = checkLastIndex(TIM4_CH1_ROW_IDX);
         }
     }
 }
 
-// Handler for Tim4 CH2 DMA
+/*! Handler for Tim4 CH2 DMA */
 void DMA1_Stream3_IRQHandler(void) {
 
     if(DMA_GetITStatus(DMA1_Stream3, DMA_IT_TCIF3)) {
         DMA_ClearITPendingBit(DMA1_Stream3, DMA_IT_TCIF3);
 
-        if(dmaLast) {
+        if(sLedDMA[TIM4_CH2_ROW_IDX].mDmaLast) {
             /* disable dma */
             DMA_Cmd(DMA1_Stream3, DISABLE);
 
             /* disable timer */
             TIM_DMACmd(TIM4, TIM_DMA_CC2, DISABLE);
 
-            dmaDone = true;
+#if defined(WS2812_FREERTOS)
+            {
+                BaseType_t xHigherPriorityTaskWoken = pdFALSE;
+                xSemaphoreGiveFromISR(sLedDMA[TIM4_CH2_ROW_IDX].mDmaDoneSemaphore, &xHigherPriorityTaskWoken);
+                portEND_SWITCHING_ISR(xHigherPriorityTaskWoken);
+            }
+#else /* WS2812_FREERTOS */
+            sLedDMA[TIM4_CH2_ROW_IDX].mDmaDone = true;
+#endif /* WS2812_FREERTOS */
         } else {
 
             /* fill next buffer */
-            fillBuffer();
+            fillBuffer(TIM4_CH2_ROW_IDX);
 
-            dmaLast = checkLastIndex();
+            sLedDMA[TIM4_CH2_ROW_IDX].mDmaLast = checkLastIndex(TIM4_CH2_ROW_IDX);
         }
     }
 }

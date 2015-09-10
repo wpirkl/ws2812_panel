@@ -16,6 +16,7 @@
 #include "stm32f4xx_dma.h"
 #include "stm32f4xx_usart.h"
 #include "stm32f4xx_rcc.h"
+#include "misc.h"
 
 #include "uart_dma.h"
 
@@ -30,6 +31,7 @@ void usart_dma_open(void) {
     GPIO_InitTypeDef GPIO_InitStructure;
     USART_InitTypeDef USART_InitStructure;
     DMA_InitTypeDef DMA_InitStructure;
+    NVIC_InitTypeDef nvic_init;
 
     sUsart2RxTail = 0;
 
@@ -83,6 +85,16 @@ void usart_dma_open(void) {
     /* start Rx DMA */
     USART_DMACmd(USART2, USART_DMAReq_Rx, ENABLE);
     USART_DMACmd(USART2, USART_DMAReq_Tx, ENABLE);
+
+    /* enable Interrupt */
+    nvic_init.NVIC_IRQChannel = USART2_IRQn;
+    nvic_init.NVIC_IRQChannelPreemptionPriority = 8;
+    nvic_init.NVIC_IRQChannelSubPriority = 0;
+    nvic_init.NVIC_IRQChannelCmd = ENABLE;
+    NVIC_Init(&nvic_init);
+
+    /* enable RXNE interrupt */
+    USART_ITConfig(USART2, USART_IT_RXNE, ENABLE);
 
     /* enable USART */
     USART_Cmd(USART2, ENABLE);
@@ -255,6 +267,46 @@ size_t usart_dma_write(uint8_t * inBuffer, size_t inNumBytes) {
     }
 
     return lStartIndex;
+}
+
+/*! Usart2 interrupt handler */
+void USART2_IRQHandler(void) {
+
+    /*! Check if received IDLE */
+    if(USART_GetITStatus(USART2, USART_IT_RXNE)) {
+        USART_ClearITPendingBit(USART2, USART_IT_RXNE);
+
+        /* activate IDLE interrupt */
+        USART_ITConfig(USART2, USART_IT_IDLE, ENABLE);
+
+        /* deactivate RXNE interrupt */
+        USART_ITConfig(USART2, USART_IT_RXNE, DISABLE);
+
+        /* rise semaphore to treat data */
+        
+    }
+
+    /*! Check if received Data */
+    if(USART_GetITStatus(USART2, USART_IT_IDLE)) {
+        USART_ClearITPendingBit(USART2, USART_IT_IDLE);
+
+        /* activate RXNE interrupt */
+        USART_ITConfig(USART2, USART_IT_RXNE, ENABLE);
+        
+
+        /* deactivate IDLE interrupt */
+        USART_ITConfig(USART2, USART_IT_IDLE, DISABLE);
+    }
+
+    if(USART_GetITStatus(USART2, USART_IT_TC)) {
+        USART_ClearITPendingBit(USART2, USART_IT_TC);
+
+        /* deactivate transfer complete interrupt */
+        USART_ITConfig(USART2, USART_IT_TC, DISABLE);
+
+        /* rise semaphore to notify sender */
+        
+    }
 }
 
 

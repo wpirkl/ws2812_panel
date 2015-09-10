@@ -14,6 +14,8 @@
 
 #include "ws2812.h"
 
+#include "esp8266.h"
+
 #include "FreeRTOS.h"
 #include "task.h"
 
@@ -25,6 +27,9 @@ void init();
 
 void led_task(void * inParameters) {
 
+    /* Initialize LEDs */
+    ws2812_init();
+
     /* power on test */
     {
         size_t lColumnNum = ws2812_getLED_PanelNumberOfColumns();
@@ -32,8 +37,7 @@ void led_task(void * inParameters) {
         size_t lPatternCount;
         size_t lCount;
 
-        uint8_t lColor[3] = {0, 0, 0
-        };
+        uint8_t lColor[3] = {0, 0, 0};
 
         for(lPatternCount = 0; lPatternCount < 3; lPatternCount++) {
 
@@ -100,7 +104,7 @@ void led_task(void * inParameters) {
 
             /* hamilton circle over 3D color cube */
             switch(lState) {
-				default:
+                default:
                 case 7:
                     // decrement blue
                     if(lBlue > 0) {
@@ -182,6 +186,15 @@ void led_task(void * inParameters) {
 #endif
 }
 
+void esp8266_task(void * inParameters) {
+
+    esp8266_init();
+
+    for(;;) {
+        vTaskDelay(2000);
+    }
+}
+
 int main(void) {
 
     NVIC_PriorityGroupConfig( NVIC_PriorityGroup_4 );
@@ -194,148 +207,13 @@ int main(void) {
      */
     setbuf(stdout, NULL);
 
-    ws2812_init();
-
-#if 1
     {
-        /* Lounch other tasks in init task! */
-        xTaskCreate(led_task, ( const char * )"led", configMINIMAL_STACK_SIZE * 8, NULL, 0, NULL);
+        xTaskCreate(led_task,     ( const char * )"led",     configMINIMAL_STACK_SIZE * 8, NULL, configMAX_PRIORITIES - 1, NULL);
+        xTaskCreate(esp8266_task, ( const char * )"esp8266", configMINIMAL_STACK_SIZE * 8, NULL, configMAX_PRIORITIES - 2, NULL);
 
         /* Start the scheduler. */
         vTaskStartScheduler();
     }
-#endif
-
-#if 0
-    for(;;) {
-
-        uint8_t lCharacter;
-        size_t lRow;
-        size_t lColumn;
-        uint8_t lRed;
-        uint8_t lGreen;
-        uint8_t lBlue;
-
-        lCharacter = getchar();
-
-        switch(lCharacter) {
-            case 'a':
-                lRed   = getchar();
-                lGreen = getchar();
-                lBlue  = getchar();
-
-                setAllLED(lRed,lGreen,lBlue);
-                break;
-            case 'l':
-                lRow    = getchar();
-                lColumn = getchar() << 8;
-                lColumn = lColumn | getchar();
-
-                lRed   = getchar();
-                lGreen = getchar();
-                lBlue  = getchar();
-
-                setLED(lRow, lColumn, lRed, lGreen, lBlue);
-                break;
-            case 'u':
-                updateLED();
-                break;
-        }
-
-
-    }
-
-#endif
-
-#if 0
-    {
-        uint8_t lRed = 0;
-        uint8_t lGreen = 0;
-        uint8_t lBlue = 0;
-        uint8_t lState = 0;
-        for(;;) {
-
-            /* hamilton circle over 3D color cube */
-            switch(lState) {
-                case 7:
-                    // decrement blue
-                    if(lBlue > 0) {
-                        lBlue--;
-                    }
-                    if(lBlue == 0) {
-                        lState++;
-                    }
-                    break;
-                case 6:
-                    // decrement red
-                    if(lRed > 0) {
-                        lRed--;
-                    }
-                    if(lRed == 0) {
-                        lState++;
-                    }
-                    break;
-                case 5:
-                    // decrement green
-                    if(lGreen > 0) {
-                        lGreen--;
-                    }
-                    if(lGreen == 0) {
-                        lState++;
-                    }
-                    break;
-                case 4:
-                    // increment red
-                    if(lRed < 255) {
-                        lRed++;
-                    }
-                    if(lRed == 255) {
-                        lState++;
-                    }
-                    break;
-                case 3:
-                    // Increment Blue
-                    if(lBlue < 255) {
-                        lBlue++;
-                    }
-                    if(lBlue == 255) {
-                        lState++;
-                    }
-                    break;
-                case 2:
-                    // decrement red
-                    if(lRed > 0) {
-                        lRed--;
-                    }
-                    if(lRed == 0) {
-                        lState++;
-                    }
-                    break;
-                case 1:
-                    // increment green
-                    if(lGreen < 255) {
-                        lGreen ++;
-                    }
-                    if(lGreen == 255) {
-                        lState++;
-                    }
-                    break;
-                case 0:
-                    // increment red
-                    if(lRed < 255) {
-                        lRed++;
-                    }
-                    if(lRed == 255) {
-                        lState++;
-                    }
-                    break;
-            }
-
-            setAllLED(lRed,lGreen,lBlue);
-            updateLED();
-        }
-    }
-#endif
 
     return 0;
 }

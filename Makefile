@@ -31,11 +31,11 @@ LIBPATH = lib
 
 # libs to link
 LIBS  = ws2812
-LIBS += stdperiph
 LIBS += usbdevcore
 LIBS += usbdevcdc
 LIBS += usbcore
 LIBS += esp8266
+LIBS += stdperiph
 LIBS += freertos
 
 LIBPATH_ws2812     = $(LIBPATH)/ws2812
