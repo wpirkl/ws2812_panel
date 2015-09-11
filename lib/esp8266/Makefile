@@ -10,6 +10,7 @@ CFLAGS += -Iinc
 CFLAGS += -I../Core/cmsis
 CFLAGS += -I../Core/stm32
 CFLAGS += -I../StdPeriph/inc
+CFLAGS += -I../FreeRTOS/inc
 
 
 LIBNAME = libesp8266.a
