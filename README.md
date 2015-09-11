@@ -1,5 +1,9 @@
 
-# Connections
+# WS2812
+
+## Configuration
+
+## Connections
 
 | STRIP | PIN | TIMER    | DMA               |
 | ----- | --- | -------- | ----------------- |
@@ -8,8 +12,6 @@
 |     3 | B0  | TIM3 CH3 | DMA1 CH5 Stream 7 |
 |     4 | B1  | TIM3 CH4 | DMA1 CH5 Stream 2 |
 |     5 | B7  | TIM4 CH2 | DMA1 CH2 Stream 3 |
-
-# USB VCP Protocol
 
 # ESP8266
 
