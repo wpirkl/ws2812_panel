@@ -11,6 +11,8 @@
 #include <stdbool.h>
 #include <stdint.h>
 #include <stddef.h>
+// for debug
+#include <stdio.h>
 
 #include "stm32f4xx_gpio.h"
 #include "stm32f4xx_dma.h"
@@ -20,8 +22,22 @@
 
 #include "uart_dma.h"
 
+#define USART2_RX_BUFFER_LEN        (1024)
+
+#define USART_DMA_FREERTOS
+
+
+#if defined(USART_DMA_FREERTOS)
+#include "FreeRTOS.h"
+#include "semphr.h"
+#endif /* USART_DMA_FREERTOS */
+
 static uint16_t sUsart2RxBuffer[USART2_RX_BUFFER_LEN];
 static size_t   sUsart2RxTail;
+#if defined(USART_DMA_FREERTOS)
+static SemaphoreHandle_t sUsart2RxSemaphore;
+static SemaphoreHandle_t sUsart2TxSemaphore;
+#endif /* USART_DMA_FREERTOS */
 
 /*!
     Initialize the USART using DMA
@@ -35,6 +51,7 @@ void usart_dma_open(void) {
 
     sUsart2RxTail = 0;
 
+    RCC_AHB1PeriphClockCmd(RCC_AHB1Periph_DMA1, ENABLE);
     RCC_APB1PeriphClockCmd(RCC_APB1Periph_USART2, ENABLE);
 
     // GPIO A3 - USART2 RX
@@ -82,25 +99,40 @@ void usart_dma_open(void) {
     DMA_InitStructure.DMA_Priority           = DMA_Priority_Medium;             /* Normal priority */
     DMA_Init(DMA1_Stream5, &DMA_InitStructure);     /* Init DMA */
 
-    /* start Rx DMA */
+    /* enable Rx DMA */
     USART_DMACmd(USART2, USART_DMAReq_Rx, ENABLE);
     USART_DMACmd(USART2, USART_DMAReq_Tx, ENABLE);
 
-    /* enable Interrupt */
+#if defined(USART_DMA_FREERTOS)
+    sUsart2RxSemaphore = xSemaphoreCreateCounting(1, 0);
+    assert_param(sUsart2RxSemaphore != NULL);
+
+    sUsart2TxSemaphore = xSemaphoreCreateCounting(1, 0);
+    assert_param(sUsart2TxSemaphore != NULL);
+#endif
+
+    /* enable UART Interrupt */
     nvic_init.NVIC_IRQChannel = USART2_IRQn;
     nvic_init.NVIC_IRQChannelPreemptionPriority = 8;
     nvic_init.NVIC_IRQChannelSubPriority = 0;
     nvic_init.NVIC_IRQChannelCmd = ENABLE;
     NVIC_Init(&nvic_init);
 
+    /* enable DMA Interrupt */
+    nvic_init.NVIC_IRQChannel = DMA1_Stream6_IRQn;
+    NVIC_Init(&nvic_init);
+
     /* enable RXNE interrupt */
     USART_ITConfig(USART2, USART_IT_RXNE, ENABLE);
 
-    /* enable USART */
-    USART_Cmd(USART2, ENABLE);
+    /* enable dma interrupt on tx done */
+    DMA_ITConfig(DMA1_Stream6, DMA_IT_TC, ENABLE);
 
     /* enable DMA */
     DMA_Cmd(DMA1_Stream5, ENABLE);
+
+    /* enable USART */
+    USART_Cmd(USART2, ENABLE);
 }
 
 /*!
@@ -120,7 +152,7 @@ static inline size_t usart_dma_rx_get_head(void) {
 */
 static inline size_t usart_dma_rx_inc_tail(void) {
 
-    return (sUsart2RxTail + 1) & USART2_RX_BUFFER_LEN;
+    return (sUsart2RxTail + 1) & (USART2_RX_BUFFER_LEN - 1);
 }
 
 /*!
@@ -130,7 +162,7 @@ static inline size_t usart_dma_rx_inc_tail(void) {
 */
 size_t usart_dma_rx_num(void) {
 
-    return ((usart_dma_rx_get_head() + USART2_RX_BUFFER_LEN) - sUsart2RxTail) & USART2_RX_BUFFER_LEN;
+    return ((usart_dma_rx_get_head() + USART2_RX_BUFFER_LEN) - sUsart2RxTail) & (USART2_RX_BUFFER_LEN -1);
 }
 
 /*!
@@ -153,7 +185,7 @@ size_t usart_dma_read(uint8_t * inBuffer, size_t inMaxNumBytes) {
     lCopy = ((lAvailable < inMaxNumBytes)? lAvailable : inMaxNumBytes);
 
     for(lCount = 0; lCount < lCopy; lCount++) {
-        inBuffer[lCount] = sUsart2RxTail;
+        inBuffer[lCount] = sUsart2RxBuffer[sUsart2RxTail];
         sUsart2RxTail = usart_dma_rx_inc_tail();
     }
 
@@ -199,20 +231,12 @@ static DMA_InitTypeDef sDMA_InitStructureTx = {
 */
 size_t usart_dma_write(uint8_t * inBuffer, size_t inNumBytes) {
 
-#if 0
-    size_t lTimeout;
-#endif
     size_t lStartIndex;
     size_t lSendSize = 0;
     size_t lCount;
     size_t lCount1;
 
     for(lStartIndex = 0; lStartIndex < inNumBytes; lStartIndex += lSendSize) {
-
-#if 0
-        /* reset timeout */
-        lTimeout = 1000;
-#endif
 
         lSendSize = (inNumBytes - lStartIndex > USART2_RX_BUFFER_LEN)? USART2_RX_BUFFER_LEN : (inNumBytes - lStartIndex);
 
@@ -221,94 +245,108 @@ size_t usart_dma_write(uint8_t * inBuffer, size_t inNumBytes) {
             sUsart2TxBuffer[lCount] = inBuffer[lCount1];
         }
 
-        /* clear transfer complete flag */
-        USART_ClearFlag(USART2, USART_FLAG_TC);
-
         /* setup DMA */
-        sDMA_InitStructureTx.DMA_BufferSize = lSendSize;
+        sDMA_InitStructureTx.DMA_BufferSize      = lSendSize;
+        sDMA_InitStructureTx.DMA_Memory0BaseAddr = (uint32_t) &sUsart2TxBuffer[0];
+
         DMA_Init(DMA1_Stream6, &sDMA_InitStructureTx);      /* Init DMA */
 
         /* start DMA */
         DMA_Cmd(DMA1_Stream6, ENABLE);
 
-#if 0
-        /* wait on DMA complete flag */
-        for(; lTimeout != 0; lTimeout--) {
-            if(DMA_GetFlagStatus(DMA1_Stream6, DMA_FLAG_TCIF6)) {
-                break;
-            }
-            /* delay */
-        }
-        /* Handle timeout */
-        if(lTimeout == 0) {
-            DMA_Cmd(DMA1_Stream6, DISABLE);
-            break;
-        }
+#if defined(USART_DMA_FREERTOS)
+        /* wait on semaphore */
+        xSemaphoreTake(sUsart2TxSemaphore, portMAX_DELAY);
 #else
         while(!DMA_GetFlagStatus(DMA1_Stream6, DMA_FLAG_TCIF6));
-#endif
+        DMA_ClearFlag(DMA1_Stream6, DMA_FLAG_TCIF6);
 
-#if 0
-        /* wait on usart transfer complete flag */
-        for(; lTimeout != 0; lTimeout--) {
-            if(USART_GetFlagStatus(USART2, USART_FLAG_TC)) {
-                break;
-            }
-            /* delay */
-        }
-
-        /* Handle timeout */
-        if(lTimeout == 0) {
-            break;
-        }
-#else
-        while(!USART_GetFlagStatus(USART2, USART_FLAG_TC));
+        DMA_Cmd(DMA1_Stream6, DISABLE);
 #endif
     }
 
     return lStartIndex;
+
+#if 0
+    size_t lCount;
+
+    for(lCount = 0; lCount < inNumBytes; lCount++) {
+
+        while(!USART_GetFlagStatus(USART2, USART_FLAG_TXE));
+        USART_SendData(USART2, inBuffer[lCount]);
+    }
+
+    return inNumBytes;
+#endif
 }
+
+
+void usart_dma_rx_wait(void) {
+
+    /* wait on semaphore */
+    xSemaphoreTake(sUsart2RxSemaphore, portMAX_DELAY);
+}
+
+
 
 /*! Usart2 interrupt handler */
 void USART2_IRQHandler(void) {
 
-    /*! Check if received IDLE */
-    if(USART_GetITStatus(USART2, USART_IT_RXNE)) {
-        USART_ClearITPendingBit(USART2, USART_IT_RXNE);
+    // if(USART_GetITStatus(USART2, USART_IT_RXNE)) {
+        // USART_ClearITPendingBit(USART2, USART_IT_RXNE);
+
+        // /* activate IDLE interrupt */
+        // USART_ITConfig(USART2, USART_IT_IDLE, ENABLE);
+
+        // /* deactivate RXNE interrupt */
+        // USART_ITConfig(USART2, USART_IT_RXNE, DISABLE);
+    // }
+
+    if(USART_GetITStatus(USART2, USART_IT_IDLE)) {     /*! Check if received Data */
+        USART_ClearITPendingBit(USART2, USART_IT_IDLE);
+
+        /* activate RXNE interrupt */
+        USART_ITConfig(USART2, USART_IT_RXNE, ENABLE);
+
+        /* deactivate IDLE interrupt */
+        USART_ITConfig(USART2, USART_IT_IDLE, DISABLE);
+
+#if defined(USART_DMA_FREERTOS)
+        /* rise semaphore to treat data */
+        {
+            BaseType_t xHigherPriorityTaskWoken = pdFALSE;
+            xSemaphoreGiveFromISR(sUsart2RxSemaphore, &xHigherPriorityTaskWoken);
+            portEND_SWITCHING_ISR(xHigherPriorityTaskWoken);
+        }
+#endif /* USART_DMA_FREERTOS */
+
+    } else {    /* usually we should check for RXNE here, but DMA is faster... */
 
         /* activate IDLE interrupt */
         USART_ITConfig(USART2, USART_IT_IDLE, ENABLE);
 
         /* deactivate RXNE interrupt */
         USART_ITConfig(USART2, USART_IT_RXNE, DISABLE);
-
-        /* rise semaphore to treat data */
-        
-    }
-
-    /*! Check if received Data */
-    if(USART_GetITStatus(USART2, USART_IT_IDLE)) {
-        USART_ClearITPendingBit(USART2, USART_IT_IDLE);
-
-        /* activate RXNE interrupt */
-        USART_ITConfig(USART2, USART_IT_RXNE, ENABLE);
-        
-
-        /* deactivate IDLE interrupt */
-        USART_ITConfig(USART2, USART_IT_IDLE, DISABLE);
-    }
-
-    if(USART_GetITStatus(USART2, USART_IT_TC)) {
-        USART_ClearITPendingBit(USART2, USART_IT_TC);
-
-        /* deactivate transfer complete interrupt */
-        USART_ITConfig(USART2, USART_IT_TC, DISABLE);
-
-        /* rise semaphore to notify sender */
-        
     }
 }
 
+#if defined(USART_DMA_FREERTOS)
+void DMA1_Stream6_IRQHandler(void) {
+
+
+    if(DMA_GetITStatus(DMA1_Stream6, DMA_IT_TCIF6)) {
+        DMA_ClearITPendingBit(DMA1_Stream6, DMA_IT_TCIF6);
+
+//        DMA_Cmd(DMA1_Stream6, DISABLE);
+        /* rise semaphore to treat data */
+        {
+            BaseType_t xHigherPriorityTaskWoken = pdFALSE;
+            xSemaphoreGiveFromISR(sUsart2TxSemaphore, &xHigherPriorityTaskWoken);
+            portEND_SWITCHING_ISR(xHigherPriorityTaskWoken);
+        }
+    }
+}
+#endif
 
 
 /* eof */
