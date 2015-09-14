@@ -1,10 +1,14 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdint.h>
+#include <ctype.h>
 #include <math.h>
 
+#include "stm32f4xx_rcc.h"
 #include "stm32f4xx_conf.h"
+#include "stm32f4xx_gpio.h"
 #include "stm32f4xx.h"
+#include "misc.h"
 #include "main.h"
 
 #include "usbd_cdc_core.h"
@@ -15,6 +19,7 @@
 #include "ws2812.h"
 
 #include "esp8266.h"
+#include "uart_dma.h"
 
 #include "FreeRTOS.h"
 #include "task.h"
@@ -188,10 +193,40 @@ void led_task(void * inParameters) {
 
 void esp8266_task(void * inParameters) {
 
+    uint8_t lBuffer[128];
+    size_t lRead;
+    size_t lCount;
+    uint8_t lChar;
+
+    vTaskDelay(10000);
+
+#if 0
+    {
+        RCC_ClocksTypeDef lFreqs;
+
+        RCC_GetClocksFreq(&lFreqs);
+        printf("Sysclk: %9d\r\n", lFreqs.SYSCLK_Frequency);
+        printf("HCLK:   %9d\r\n", lFreqs.HCLK_Frequency);
+        printf("PCLK1:  %9d\r\n", lFreqs.PCLK1_Frequency);
+        printf("PCLK2:  %9d\r\n", lFreqs.PCLK2_Frequency);
+    }
+#endif
+
     esp8266_init();
 
     for(;;) {
-        vTaskDelay(2000);
+        lRead = usart_dma_read(lBuffer, sizeof(lBuffer));
+        for(lCount = 0; lCount < lRead; lCount++) {
+            if(isprint(lBuffer[lCount]) || isspace(lBuffer[lCount])) {
+                putchar(lBuffer[lCount]);
+            } else {
+                printf("[0x%02x]", lBuffer[lCount]);
+            }
+        }
+
+        if(VCP_get_char(&lChar)) {
+            usart_dma_write(&lChar, 1);
+        }
     }
 }
 
