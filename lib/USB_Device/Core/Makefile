@@ -5,8 +5,11 @@ SRCS = usbd_core.c usbd_ioreq.c usbd_req.c
 include $(ROOTDIR)/config.mk
 
 # Includes
-CFLAGS += -Iinc -I../../Core/cmsis -I../../Core/stm32
-CFLAGS += -I../../Conf -I../../USB_OTG/inc
+CFLAGS += -Iinc
+CFLAGS += -I../../Core/cmsis
+CFLAGS += -I../../Core/stm32
+CFLAGS += -I../../Conf
+CFLAGS += -I../../USB_OTG/inc
 
 LIBNAME = libusbdevcore.a
 

@@ -8,7 +8,9 @@ SRCS += usb_hcd_int.c usb_otg.c
 include $(ROOTDIR)/config.mk
 
 # Includes
-CFLAGS += -Iinc -I../Core/cmsis -I../Core/stm32
+CFLAGS += -Iinc
+CFLAGS += -I../Core/cmsis
+CFLAGS += -I../Core/stm32
 CFLAGS += -I../Conf
 LIBNAME = libusbcore.a
 
