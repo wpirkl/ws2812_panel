@@ -7,6 +7,7 @@ include $(ROOTDIR)/config.mk
 
 # Includes
 CFLAGS += -Iinc
+CFLAGS += -I../Conf
 CFLAGS += -I../Core/cmsis
 CFLAGS += -I../Core/stm32
 CFLAGS += -I../StdPeriph/inc
