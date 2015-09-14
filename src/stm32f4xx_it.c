@@ -1,3 +1,4 @@
+#include "stm32f4xx_exti.h"
 #include "stm32f4xx_it.h"
 #include "stm32f4xx_conf.h"
 #include "main.h"
