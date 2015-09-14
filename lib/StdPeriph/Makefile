@@ -15,7 +15,10 @@ SRCS = misc.c stm32f4xx_dma.c stm32f4xx_rcc.c stm32f4xx_adc.c \
 include $(ROOTDIR)/config.mk
 
 # Includes
-CFLAGS += -Iinc -I../Core/cmsis -I../Core/stm32
+CFLAGS += -Iinc
+CFLAGS += -I../Conf
+CFLAGS += -I../Core/cmsis
+CFLAGS += -I../Core/stm32
 
 
 LIBNAME = libstdperiph.a
