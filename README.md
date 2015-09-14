@@ -17,10 +17,10 @@
 
 ## Connections:
 
-| USART | PIN | DMA               |
-| ----- | --- | ----------------- |
-| 2 RX  | A3  | DMA1 CH4 Stream 5 |
-| 2 TX  | A2  | DMA1 CH4 Stream 6 |
-| 2 RTS | A1  |                   |
-| 2 CTS | A0  |                   |
+| USART | PIN | DMA               | ESP8266 |         |
+| ----- | --- | ----------------- | ------- | ------- |
+| 2 RX  | A3  | DMA1 CH4 Stream 5 | TX      | Yellow  |
+| 2 TX  | A2  | DMA1 CH4 Stream 6 | RX      | Orange  |
+| 2 RTS | A1  |                   |         |         |
+| 2 CTS | A0  |                   |         |         |
 
