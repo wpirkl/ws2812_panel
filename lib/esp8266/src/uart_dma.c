@@ -11,6 +11,8 @@
 #include <stdbool.h>
 #include <stdint.h>
 #include <stddef.h>
+#include <string.h>
+
 // for debug
 #include <stdio.h>
 
@@ -181,6 +183,8 @@ size_t usart_dma_read(uint8_t * inBuffer, size_t inMaxNumBytes) {
     size_t lCount;
     size_t lCopy;
 
+    assert_param(inBuffer != NULL);
+
     lAvailable = usart_dma_rx_num();
     lCopy = ((lAvailable < inMaxNumBytes)? lAvailable : inMaxNumBytes);
 
@@ -190,6 +194,87 @@ size_t usart_dma_read(uint8_t * inBuffer, size_t inMaxNumBytes) {
     }
 
     return lCopy;
+}
+
+/*!
+    Get a number of bytes from the rx buffer until a certain character or end of buffer
+
+    This function is nonblocking. It will return 0 if nothing's received
+
+    \param[in]  inBuffer
+    \param[in]  inMaxNumBytes   
+    \param[in]  inCharacter     The character to stop reading
+
+    \retval     The number of bytes read
+*/
+size_t usart_dma_read_until(uint8_t * inBuffer, size_t inMaxNumBytes, uint8_t inCharacter) {
+
+    size_t lAvailable;
+    size_t lCount;
+    size_t lCopy;
+    uint8_t lCharacter;
+
+    assert_param(inBuffer != NULL);
+
+    lAvailable = usart_dma_rx_num();
+    lCopy = ((lAvailable < inMaxNumBytes)? lAvailable : inMaxNumBytes);
+
+    for(lCount = 0; lCount < lCopy;) {
+
+        lCharacter = sUsart2RxBuffer[sUsart2RxTail];
+        sUsart2RxTail = usart_dma_rx_inc_tail();
+        inBuffer[lCount++] = lCharacter;
+
+        if(lCharacter == inCharacter) {
+            break;
+        }
+    }
+
+    return lCount;
+}
+
+/*!
+    Get a number of bytes from the rx buffer until a certain character or end of buffer
+
+    This function is nonblocking. It will return 0 if nothing's received
+
+    \param[in]  inBuffer
+    \param[in]  inMaxNumBytes   
+    \param[in]  inStartOffset   Initial offset into the buffer
+    \param[in]  inString        The character sequence to compare
+    \param[in]  inStringLength  The length of the character sequence to match
+
+    \retval     The number of bytes read
+*/
+size_t usart_dma_read_until_str(uint8_t * inBuffer, size_t inMaxNumBytes, size_t inStartOffset, uint8_t * inString, size_t inStringLength) {
+ 
+    size_t lAvailable;
+    size_t lCount;
+    size_t lCopy;
+    uint8_t lCharacter;
+
+    assert_param(inBuffer != NULL);
+    assert_param(inString != NULL);
+    assert_param(inStringLength > 0);
+
+    lAvailable = usart_dma_rx_num();
+    lCopy = ((lAvailable < inMaxNumBytes)? lAvailable : inMaxNumBytes);
+
+    for(lCount = 0; lCount < lCopy;) {
+
+        inBuffer[inStartOffset + (lCount++)] = sUsart2RxBuffer[sUsart2RxTail];
+        sUsart2RxTail = usart_dma_rx_inc_tail();
+
+        /* got enough bytes to compare */
+        if(inStartOffset + lCount >= inStringLength) {
+            if(memcmp(inBuffer[(inStartOffset + lCount) - inStringLength], inString, inStringLength) == 0) {
+                /* match found */
+                break;
+            }
+        }
+    }
+
+    return lCount;
 }
 
 void   usart_dma_rx_clear(void) {
