@@ -200,24 +200,18 @@ void esp8266_task(void * inParameters) {
 
     vTaskDelay(10000);
 
-#if 0
-    {
-        RCC_ClocksTypeDef lFreqs;
-
-        RCC_GetClocksFreq(&lFreqs);
-        printf("Sysclk: %9d\r\n", lFreqs.SYSCLK_Frequency);
-        printf("HCLK:   %9d\r\n", lFreqs.HCLK_Frequency);
-        printf("PCLK1:  %9d\r\n", lFreqs.PCLK1_Frequency);
-        printf("PCLK2:  %9d\r\n", lFreqs.PCLK2_Frequency);
-    }
-#endif
-
     esp8266_init();
 
     for(;;) {
         lRead = usart_dma_read(lBuffer, sizeof(lBuffer));
         for(lCount = 0; lCount < lRead; lCount++) {
-            if(isprint(lBuffer[lCount]) || isspace(lBuffer[lCount])) {
+            if(isprint(lBuffer[lCount])) {
+                putchar(lBuffer[lCount]);
+            } else if (lBuffer[lCount] == '\n') {
+                printf("\\n");
+            } else if(lBuffer[lCount] == '\r') {
+                printf("\\r");
+            } else if(isspace(lBuffer[lCount])) {
                 putchar(lBuffer[lCount]);
             } else {
                 printf("[0x%02x]", lBuffer[lCount]);
