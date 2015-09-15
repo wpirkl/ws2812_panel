@@ -251,7 +251,6 @@ size_t usart_dma_read_until_str(uint8_t * inBuffer, size_t inMaxNumBytes, size_t
     size_t lAvailable;
     size_t lCount;
     size_t lCopy;
-    uint8_t lCharacter;
 
     assert_param(inBuffer != NULL);
     assert_param(inString != NULL);
@@ -267,7 +266,7 @@ size_t usart_dma_read_until_str(uint8_t * inBuffer, size_t inMaxNumBytes, size_t
 
         /* got enough bytes to compare */
         if(inStartOffset + lCount >= inStringLength) {
-            if(memcmp(inBuffer[(inStartOffset + lCount) - inStringLength], inString, inStringLength) == 0) {
+            if(memcmp(&inBuffer[(inStartOffset + lCount) - inStringLength], inString, inStringLength) == 0) {
                 /* match found */
                 break;
             }
