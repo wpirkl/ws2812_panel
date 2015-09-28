@@ -152,9 +152,9 @@ static inline size_t usart_dma_rx_get_head(void) {
 
     \return Increment of 1 of the tail index
 */
-static inline size_t usart_dma_rx_inc_tail(void) {
+static inline size_t usart_dma_rx_inc_tail(size_t inTail) {
 
-    return (sUsart2RxTail + 1) & (USART2_RX_BUFFER_LEN - 1);
+    return (inTail + 1) & (USART2_RX_BUFFER_LEN - 1);
 }
 
 /*!
@@ -190,7 +190,7 @@ size_t usart_dma_read(uint8_t * inBuffer, size_t inMaxNumBytes) {
 
     for(lCount = 0; lCount < lCopy; lCount++) {
         inBuffer[lCount] = sUsart2RxBuffer[sUsart2RxTail];
-        sUsart2RxTail = usart_dma_rx_inc_tail();
+        sUsart2RxTail = usart_dma_rx_inc_tail(sUsart2RxTail);
     }
 
     return lCopy;
@@ -222,7 +222,7 @@ size_t usart_dma_read_until(uint8_t * inBuffer, size_t inMaxNumBytes, uint8_t in
     for(lCount = 0; lCount < lCopy;) {
 
         lCharacter = sUsart2RxBuffer[sUsart2RxTail];
-        sUsart2RxTail = usart_dma_rx_inc_tail();
+        sUsart2RxTail = usart_dma_rx_inc_tail(sUsart2RxTail);
         inBuffer[lCount++] = lCharacter;
 
         if(lCharacter == inCharacter) {
@@ -262,7 +262,7 @@ size_t usart_dma_read_until_str(uint8_t * inBuffer, size_t inMaxNumBytes, size_t
     for(lCount = 0; lCount < lCopy;) {
 
         inBuffer[inStartOffset + (lCount++)] = sUsart2RxBuffer[sUsart2RxTail];
-        sUsart2RxTail = usart_dma_rx_inc_tail();
+        sUsart2RxTail = usart_dma_rx_inc_tail(sUsart2RxTail);
 
         /* got enough bytes to compare */
         if(inStartOffset + lCount >= inStringLength) {
@@ -274,6 +274,51 @@ size_t usart_dma_read_until_str(uint8_t * inBuffer, size_t inMaxNumBytes, size_t
     }
 
     return lCount;
+}
+
+/*!
+    Check if the buffer starts with a certain pattern
+
+    \param[in]  inString        The character sequence to compare
+    \param[in]  inStringLength  The length of the character sequence to match
+
+    \retval     true: if the buffer starts with the string, false if it doesn't
+*/
+bool usart_dma_peek(uint8_t * inString, size_t inStringLength) {
+
+    size_t lAvailable;
+    size_t lTail;
+    size_t lIndex;
+
+    lAvailable = usart_dma_rx_num();
+    lTail = sUsart2RxTail;
+
+    /* skip leading whitespaces */
+    /* for(lTail = sUsart2RxTail; isspace(sUsart2RxBuffer[lTail]); lTail = usart_dma_rx_inc_tail(lTail), lAvailable--); */
+
+    if(lAvailable < inStringLength) {
+        return false;
+    }
+
+    for(lIndex = 0; lIndex < inStringLength; lIndex++, lTail = usart_dma_rx_inc_tail(lTail)) {
+
+        /* mismatch */
+        if(inString[lIndex] != (uint8_t)sUsart2RxBuffer[lTail]) {
+            return false;
+        }
+    }
+
+    return true;
+}
+
+/*!
+    Skip a number of received characters
+
+    \param[in]  inNumberOfCharacters    The number of characters to skip
+*/
+void usart_dma_rx_skip(size_t inNumberOfCharacters) {
+
+    sUsart2RxTail = (sUsart2RxTail + inNumberOfCharacters) & (USART2_RX_BUFFER_LEN - 1);
 }
 
 void   usart_dma_rx_clear(void) {
