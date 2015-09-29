@@ -17,9 +17,17 @@ void esp8266_init(void);
 
 /*!
     Handle rx
+
+    This function should be called periodically. Using FreeRTOS, it will block on a sempahore
+    and therefore should be run in it's own task.
 */
 void esp8266_rx_handler(void);
 
+
+/*!
+    Setup esp8266
+*/
+void esp8266_setup(void);
 
 
 #endif /* ESP8266_H_ */
