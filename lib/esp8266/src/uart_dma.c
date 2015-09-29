@@ -41,9 +41,6 @@ static SemaphoreHandle_t sUsart2RxSemaphore;
 static SemaphoreHandle_t sUsart2TxSemaphore;
 #endif /* USART_DMA_FREERTOS */
 
-/*!
-    Initialize the USART using DMA
-*/
 void usart_dma_open(void) {
 
     GPIO_InitTypeDef GPIO_InitStructure;
@@ -150,6 +147,8 @@ static inline size_t usart_dma_rx_get_head(void) {
 /*!
     Cirular increment of the tail index
 
+    \param[in]  inTail  Tail index before increment
+
     \return Increment of 1 of the tail index
 */
 static inline size_t usart_dma_rx_inc_tail(size_t inTail) {
@@ -158,25 +157,22 @@ static inline size_t usart_dma_rx_inc_tail(size_t inTail) {
 }
 
 /*!
-    Get the number of received bytes
+    Circular decrement of the head index
 
-    \return the number of entries
+    \param[in]  inHead  Head index before decrement
+
+    \return Decrement of 1 of the head index
 */
+static inline size_t usart_dma_rx_dec_head(size_t inHead) {
+
+    return (inHead + USART2_RX_BUFFER_LEN - 1) & (USART2_RX_BUFFER_LEN - 1);
+}
+
 size_t usart_dma_rx_num(void) {
 
     return ((usart_dma_rx_get_head() + USART2_RX_BUFFER_LEN) - sUsart2RxTail) & (USART2_RX_BUFFER_LEN -1);
 }
 
-/*!
-    Get a number of bytes from the rx buffer
-
-    This function is nonblocking. It will return 0 if nothing's received
-
-    \param[in]  inBuffer
-    \param[in]  inMaxNumBytes
-
-    \retval     The number of bytes read
-*/
 size_t usart_dma_read(uint8_t * inBuffer, size_t inMaxNumBytes) {
 
     size_t lAvailable;
@@ -196,17 +192,6 @@ size_t usart_dma_read(uint8_t * inBuffer, size_t inMaxNumBytes) {
     return lCopy;
 }
 
-/*!
-    Get a number of bytes from the rx buffer until a certain character or end of buffer
-
-    This function is nonblocking. It will return 0 if nothing's received
-
-    \param[in]  inBuffer
-    \param[in]  inMaxNumBytes   
-    \param[in]  inCharacter     The character to stop reading
-
-    \retval     The number of bytes read
-*/
 size_t usart_dma_read_until(uint8_t * inBuffer, size_t inMaxNumBytes, uint8_t inCharacter) {
 
     size_t lAvailable;
@@ -233,19 +218,6 @@ size_t usart_dma_read_until(uint8_t * inBuffer, size_t inMaxNumBytes, uint8_t in
     return lCount;
 }
 
-/*!
-    Get a number of bytes from the rx buffer until a certain character or end of buffer
-
-    This function is nonblocking. It will return 0 if nothing's received
-
-    \param[in]  inBuffer
-    \param[in]  inMaxNumBytes   
-    \param[in]  inStartOffset   Initial offset into the buffer
-    \param[in]  inString        The character sequence to compare
-    \param[in]  inStringLength  The length of the character sequence to match
-
-    \retval     The number of bytes read
-*/
 size_t usart_dma_read_until_str(uint8_t * inBuffer, size_t inMaxNumBytes, size_t inStartOffset, uint8_t * inString, size_t inStringLength) {
  
     size_t lAvailable;
@@ -276,14 +248,6 @@ size_t usart_dma_read_until_str(uint8_t * inBuffer, size_t inMaxNumBytes, size_t
     return lCount;
 }
 
-/*!
-    Check if the buffer starts with a certain pattern
-
-    \param[in]  inString        The character sequence to compare
-    \param[in]  inStringLength  The length of the character sequence to match
-
-    \retval     true: if the buffer starts with the string, false if it doesn't
-*/
 bool usart_dma_peek(uint8_t * inString, size_t inStringLength) {
 
     size_t lAvailable;
@@ -311,11 +275,69 @@ bool usart_dma_peek(uint8_t * inString, size_t inStringLength) {
     return true;
 }
 
-/*!
-    Skip a number of received characters
+bool usart_dma_peek_end(uint8_t * inString, size_t inStringLength) {
 
-    \param[in]  inNumberOfCharacters    The number of characters to skip
-*/
+    size_t lAvailable;
+    size_t lHead;
+    size_t lIndex;
+
+    lAvailable = usart_dma_rx_num();
+    lHead = usart_dma_rx_dec_head(usart_dma_rx_get_head());
+
+    if(lAvailable < inStringLength) {
+        return false;
+    }
+
+    for(lIndex = inStringLength; lIndex > 0; lIndex--, lHead = usart_dma_rx_dec_head(lHead)) {
+
+        /* mismatch */
+        if(inString[lIndex-1] != (uint8_t)sUsart2RxBuffer[lHead]) {
+            return false;
+        }
+    }
+
+    return true;
+}
+
+size_t usart_dma_match(uint8_t * inString, size_t inStringLength) {
+
+    size_t lAvailable;
+    size_t lTail;
+    size_t lOldTail;
+    size_t lIndex;
+    size_t lCount;
+    bool   lFound;
+
+    lAvailable = usart_dma_rx_num();
+
+    if(lAvailable < inStringLength) {
+        return 0;
+    }
+
+    lTail = sUsart2RxTail;
+    lOldTail = lTail;
+    for(lCount = 0; lCount < lAvailable - inStringLength; lCount++, lTail = usart_dma_rx_inc_tail(lOldTail)) {
+
+        lOldTail = lTail;
+        lFound = false;
+
+        for(lIndex = 0; lIndex < inStringLength; lIndex++, lTail = usart_dma_rx_inc_tail(lTail)) {
+            if(inString[lIndex] != (uint8_t)sUsart2RxBuffer[lTail]) {
+                lFound = false;
+                break;
+            } else {
+                lFound = true;
+            }
+        }
+
+        if(lFound) {
+            return lCount + inStringLength;
+        }
+    }
+
+    return 0;
+}
+
 void usart_dma_rx_skip(size_t inNumberOfCharacters) {
 
     sUsart2RxTail = (sUsart2RxTail + inNumberOfCharacters) & (USART2_RX_BUFFER_LEN - 1);
@@ -348,16 +370,6 @@ static DMA_InitTypeDef sDMA_InitStructureTx = {
     .DMA_Priority           = DMA_Priority_Medium,              /* Normal priority */
 };
 
-/*!
-    Send Data on USART using DMA
-
-    This function blocks until all data has been processed
-
-    \param[in]  inBuffer    Buffer to send
-    \param[in]  inNumBytes  Number of bytes to send
-
-    \retval The number of bytes actually sent
-*/
 size_t usart_dma_write(uint8_t * inBuffer, size_t inNumBytes) {
 
     size_t lStartIndex;
@@ -408,7 +420,6 @@ size_t usart_dma_write(uint8_t * inBuffer, size_t inNumBytes) {
     return inNumBytes;
 #endif
 }
-
 
 void usart_dma_rx_wait(void) {
 
