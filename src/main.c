@@ -98,7 +98,6 @@ void led_task(void * inParameters) {
     }
 
 
-
 #if 1
     {   /* LED test pattern */
         uint8_t lRed = 0;
@@ -191,7 +190,7 @@ void led_task(void * inParameters) {
 #endif
 }
 
-void esp8266_task(void * inParameters) {
+void esp8266_test_task(void * inParameters) {
 
     uint8_t lBuffer[128];
     size_t lRead;
@@ -200,7 +199,7 @@ void esp8266_task(void * inParameters) {
 
     vTaskDelay(10000);
 
-    esp8266_init();
+    usart_dma_open();
 
     for(;;) {
         lRead = usart_dma_read(lBuffer, sizeof(lBuffer));
@@ -224,6 +223,28 @@ void esp8266_task(void * inParameters) {
     }
 }
 
+void esp8266_rx_task(void * inParameters) {
+
+    for(;;) {
+        esp8266_rx_handler();
+    }
+}
+
+void esp8266_task(void * inParameters) {
+
+    esp8266_init();
+
+    /* create rx task */
+    xTaskCreate(esp8266_rx_task, ( const char * )"esp8266_rx", configMINIMAL_STACK_SIZE * 8, NULL, configMAX_PRIORITIES - 2, NULL);
+
+    vTaskDelay(5000);
+    esp8266_setup();
+
+    for(;;) {
+        vTaskDelay(10000);
+    }
+}
+
 int main(void) {
 
     NVIC_PriorityGroupConfig( NVIC_PriorityGroup_4 );
@@ -237,8 +258,9 @@ int main(void) {
     setbuf(stdout, NULL);
 
     {
-        xTaskCreate(led_task,     ( const char * )"led",     configMINIMAL_STACK_SIZE * 8, NULL, configMAX_PRIORITIES - 1, NULL);
-        xTaskCreate(esp8266_task, ( const char * )"esp8266", configMINIMAL_STACK_SIZE * 8, NULL, configMAX_PRIORITIES - 2, NULL);
+        xTaskCreate(led_task,          ( const char * )"led",     configMINIMAL_STACK_SIZE * 8, NULL, configMAX_PRIORITIES - 1, NULL);
+//        xTaskCreate(esp8266_task,      ( const char * )"esp8266", configMINIMAL_STACK_SIZE * 8, NULL, configMAX_PRIORITIES - 2, NULL);
+        xTaskCreate(esp8266_test_task, ( const char * )"test",    configMINIMAL_STACK_SIZE * 8, NULL, configMAX_PRIORITIES - 3, NULL);
 
         /* Start the scheduler. */
         vTaskStartScheduler();
