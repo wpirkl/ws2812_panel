@@ -3,7 +3,7 @@
 #include <stddef.h>
 #include <stdbool.h>
 #include <stdlib.h>
-#include <ctype.h>
+#include <string.h>
 
 #include "stm32f4xx_conf.h"     /* for assert_param */
 
@@ -23,9 +23,16 @@
 #include "semphr.h"
 #endif /* ESP8266_FREERTOS */
 
+#define ESP8266_AT_CMD_AT       "AT\r\n"
+#define ESP8266_AT_CMD_RST      "AT+RST\r\n"
+#define ESP8266_AT_CMD_GMR      "AT+GMR\r\n"
+
+const char sOK[] = "OK\r\n";
 
 
-typedef struct {
+/*! Defines a rx packet
+*/
+typedef struct s_rx_packet {
     /*! Receive buffer */
     uint8_t mBuffer[ESP8266_MAX_CHANNEL_RCV_SIZE];
     /*! Lenght of the data in the buffer */
@@ -34,6 +41,8 @@ typedef struct {
     size_t  mIndex;
 } ts_rx_packet;
 
+/*! Defines a socket object
+*/
 struct s_esp8266_socket {
 #if defined(ESP8266_FREERTOS)
     /*! Semaphore to notify on reception */
@@ -50,7 +59,9 @@ struct s_esp8266_socket {
     ts_rx_packet    mRxBuffer[ESP8266_MAX_CHANNEL_RCV_CNT];
 };
 
-typedef struct {
+/*! Defines the esp8266 object
+*/
+typedef struct s_esp8266 {
 #if defined(ESP8266_FREERTOS)
     /*! Semaphore to notify caller */
     SemaphoreHandle_t           mResponseSema;
@@ -58,6 +69,9 @@ typedef struct {
     /*! Mutex to allow only one caller at a time */
     SemaphoreHandle_t           mMutex;
 #endif /* ESP8266_FREERTOS */
+
+    /*! Number of treated characters in the rx buffer */
+    size_t                      mTreated;
 
     /*! Sentinel String */
     uint8_t                   * mSentinel;
@@ -74,6 +88,7 @@ typedef struct {
     /*! Actual receive length */
     size_t                      mResponseRcvLen;
 
+    /*! Socket objects */
     struct s_esp8266_socket     mSockets[ESP8266_MAX_CONNECTIONS];
 } ts_esp8266;
 
@@ -81,14 +96,19 @@ typedef struct {
 static ts_esp8266               sEsp8266;
 
 
+/*  ---- functions ---- */
 
 void esp8266_init(void) {
 
     usart_dma_open();
 
+    /* reset the object */
+    memset(&sEsp8266, 0, sizeof(sEsp8266));
+
 #if defined(ESP8266_FREERTOS)
     {
         size_t lCount;
+
 
         sEsp8266.mResponseSema = xSemaphoreCreateCounting(1, 0);
         assert_param(sEsp8266.mResponseSema != NULL);
@@ -105,34 +125,27 @@ void esp8266_init(void) {
 #endif /* ESP8266_FREERTOS */
 }
 
+/*!
+    This function handles asynchronous incoming data
+*/
+static bool esp8266_rx_handle_ipd(void) {
 
-void esp8266_rx_handler(void) {
+    size_t lCount;
+    size_t lChannel;
+    size_t lRcvLen;
+    size_t lLen;
 
-#if defined(ESP8266_FREERTOS)
-    for(;usart_dma_rx_num() == 0;) {
-        /* only wait if there's no data */
-        usart_dma_rx_wait();
-    }
-#endif /* ESP8266_FREERTOS */
+    uint8_t * lPtr;
 
-    /* if it starts with +IPD,x,y: */
+    uint8_t lNumberBuffer[12];
+
     if(usart_dma_peek((uint8_t*)"\r\n+IPD,", 7)) {
-
-        size_t lCount;
-        size_t lChannel;
-        size_t lRcvLen;
-        size_t lLen;
-
-        uint8_t * lPtr;
-
-        uint8_t lNumberBuffer[12];
-
         /* we already know it start's with \r\n+IPD, */
         usart_dma_rx_skip(7);
 
         /* decode channel */
         lLen = usart_dma_read_until(&lNumberBuffer[0], sizeof(lNumberBuffer)-1, ',');
-        lNumberBuffer[lLen - 1] = '\0';
+        lNumberBuffer[lLen] = '\0';
 
         lChannel = strtoul((char*)lNumberBuffer, NULL, 0);
 
@@ -140,7 +153,7 @@ void esp8266_rx_handler(void) {
 
         /* get data size */
         lLen = usart_dma_read_until(&lNumberBuffer[0], sizeof(lNumberBuffer)-1, ':');
-        lNumberBuffer[lLen - 1] = '\0';
+        lNumberBuffer[lLen] = '\0';
 
         lRcvLen = strtoul((char*)lNumberBuffer, NULL, 0);
 
@@ -165,17 +178,72 @@ void esp8266_rx_handler(void) {
         /* increment receive buffer ring */
         sEsp8266.mSockets[lChannel].mHead = (sEsp8266.mSockets[lChannel].mHead + 1) & (ESP8266_MAX_CHANNEL_RCV_CNT - 1);
 
+#if defined(ESP8266_FREERTOS)
         /* notify socket */
         xSemaphoreGive(sEsp8266.mSockets[lChannel].mRxSemaphore);
+#endif /* ESP8266_FREERTOS */
 
-/*  } else if( usart_dma_peek(...)) { */    /* handle further asynchronous messages */
+        return true;
+    }
+    return false;
+}
 
-    } else if(sEsp8266.mSentinel != NULL && sEsp8266.mSentinelLen > 0) {
+/*!
+    This function handles WIFI asynchronous messages
+    \todo implement
+*/
+static bool esp8266_rx_handle_wifi(void) {
+
+    if(usart_dma_match((uint8_t*)"WIFI DISCONNECT\r\n", 17)) {
+        
+        usart_dma_rx_skip_until('\n');
+        return true;
+    }
+    if(usart_dma_match((uint8_t*)"WIFI CONNECTED\r\n", 16)) {
+        
+        usart_dma_rx_skip_until('\n');
+        return true;
+    }
+    if(usart_dma_match((uint8_t*)"WIFI GOT IP\r\n", 13)) {
+        /* we alrady know it starts with "WIFI " */
+        /* usart_dma_rx_skip(5); */
+
+        usart_dma_rx_skip_until('\n');
+        return true;
+    }
+    return false;
+}
+
+/*!
+    This function handles x,CLOSED or X,CONNECT asynchronous messages
+    \todo implement
+*/
+static bool esp8266_rx_handle_socket(void) {
+
+    if(usart_dma_match((uint8_t*)",CONNECT\r\n", 10) > 0) {
+
+        usart_dma_rx_skip_until('\n');
+        return true;
+    }
+    if(usart_dma_match((uint8_t*)",CLOSED\r\n", 9) > 0) {
+
+        usart_dma_rx_skip_until('\n');
+        return true;
+    }
+
+    return false;
+}
+
+/*!
+    This function handles incoming command responses
+*/
+static bool esp8266_rx_handle_command_response(void) {
+
+    if(sEsp8266.mSentinel != NULL && sEsp8266.mSentinelLen > 0) {
+
         /* received command response */
-
         size_t lSize = usart_dma_match(sEsp8266.mSentinel, sEsp8266.mSentinelLen);
         if(lSize > 0) {
-            /* the sentinel was found in the buffer */
 
             if(sEsp8266.mResponseBuffer == NULL || sEsp8266.mResponseLen == 0) {
 
@@ -188,23 +256,154 @@ void esp8266_rx_handler(void) {
 
                 /* lSize <= sEsp8266.mResponseLen */
                 sEsp8266.mResponseRcvLen = usart_dma_read(sEsp8266.mResponseBuffer, lSize);
+
+                /* reset response buffer */
+                sEsp8266.mResponseBuffer = NULL;
+                sEsp8266.mResponseLen = 0;
             }
 
+            /* reset sentinel */
+            sEsp8266.mSentinel = NULL;
+            sEsp8266.mSentinelLen = 0;
+
+#if defined(ESP8266_FREERTOS)
             /* notify caller */
             xSemaphoreGive(sEsp8266.mResponseSema);
+#endif /* ESP8266_FREERTOS */
+
+            return true;
         }
-
-    } else {
-
-        /* nobody asked to receive something or not enough data */
     }
+    return false;
+}
+
+void esp8266_rx_handler(void) {
+
+    bool lTreated;
+
+#if defined(ESP8266_FREERTOS)
+    for(;usart_dma_rx_num() == sEsp8266.mTreated;) {
+        /* only wait if there's data we didn't treat before */
+        usart_dma_rx_wait();
+    }
+#endif /* ESP8266_FREERTOS */
+
+    do {
+        lTreated = false;
+
+        /* handle socket receive */
+        lTreated = lTreated || esp8266_rx_handle_ipd();
+
+        /* handle WIFI ... messages */
+        lTreated = lTreated || esp8266_rx_handle_wifi();
+
+        /* handle socket connect / close */
+        lTreated = lTreated || esp8266_rx_handle_socket();
+
+        /* handle command response */
+        lTreated = lTreated || esp8266_rx_handle_command_response();
+
+    } while(lTreated);  /* treat as long as we can */
+
+    /* update treated */
+    sEsp8266.mTreated = usart_dma_rx_num();
+}
+
+void esp8266_setup(void) {
+
     
 }
 
+/*! Retreive the length of the response
 
-void esp8266_setup(void) {
-    
-    
+    \return the length of the response string, excluding the terminating NULL character
+*/
+static size_t getResponseLength(void) {
+
+    return sEsp8266.mResponseRcvLen;
+}
+
+/*! This function sets the response buffer
+
+    \param[in]  inResponseBuffer      The sentinel string
+    \param[in]  inResponseBufferLen   The length of the sentinel string
+*/
+static void esp8266_set_response_buffer(uint8_t * inResponseBuffer, size_t inResponseBufferLen) {
+
+    sEsp8266.mResponseBuffer = inResponseBuffer;
+    sEsp8266.mResponseLen    = inResponseBufferLen;
+    sEsp8266.mResponseRcvLen = 0;
+}
+
+/*! This function sets the sentinel
+
+    \param[in]  inSentinel      The sentinel string
+    \param[in]  inSentinelLen   The length of the sentinel string
+*/
+static void esp8266_set_sentinel(uint8_t * inSentinel, size_t inSentinelLen) {
+
+    sEsp8266.mSentinel    = inSentinel;
+    sEsp8266.mSentinelLen = inSentinelLen;
+}
+
+/*! Execute a command which just response OK or ERROR
+
+    \param[in]  inCommand       The command string to send
+    \param[in]  inCommandLen    The length of the command string
+
+    \retval true        OK was returned
+    \retval false       something else was returned
+*/
+static bool esp8266_ok_cmd(uint8_t * inCommand, size_t inCommandLen) {
+
+    bool lReturnValue = false;
+
+#if defined(ESP8266_FREERTOS)
+    if(xSemaphoreTakeRecursive(sEsp8266.mMutex, portMAX_DELAY)) {
+#endif
+
+        uint8_t lResponseBuffer[16];
+        size_t lResponseLen;
+
+        /* set the sentinel to OK */
+        esp8266_set_sentinel(sOK, sizeof(sOK)-1);
+
+        /* set the response buffer */
+        esp8266_set_response_buffer(lResponseBuffer, sizeof(lResponseBuffer));
+
+        /* send command to esp8266 */
+        usart_dma_write(inCommand, inCommandLen);
+
+        /* wait on the answer */
+#if defined(ESP8266_FREERTOS)
+        xSemaphoreTake(sEsp8266.mResponseSema, portMAX_DELAY);
+#endif
+        /* get the answer length */
+        lResponseLen = getResponseLength();
+
+        /* check if OK or something else was replied */
+
+#if defined(ESP8266_FREERTOS)
+        xSemaphoreGiveRecursive(sEsp8266.mMutex);
+    }
+#endif
+
+    return lReturnValue;
+}
+
+bool esp8266_cmd_at(void) {
+
+    return false;
+}
+
+bool esp8266_cmd_rst(void) {
+
+    return false;
+}
+
+bool esp8266_cmd_gmr(void) {
+
+    return false;
 }
 
 /* eof */
