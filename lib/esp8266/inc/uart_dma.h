@@ -104,6 +104,14 @@ void usart_dma_rx_skip(size_t inNumberOfCharacters);
 
 
 /*!
+    Skip everything until a character is found
+
+    \param[in]  inCharacter     The character which was found
+*/
+void usart_dma_rx_skip_until(uint8_t inCharacter);
+
+
+/*!
     Send Data on USART using DMA
 
     This function blocks until all data has been processed

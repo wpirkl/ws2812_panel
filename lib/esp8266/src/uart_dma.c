@@ -343,6 +343,24 @@ void usart_dma_rx_skip(size_t inNumberOfCharacters) {
     sUsart2RxTail = (sUsart2RxTail + inNumberOfCharacters) & (USART2_RX_BUFFER_LEN - 1);
 }
 
+void usart_dma_rx_skip_until(uint8_t inCharacter) {
+
+    size_t lCount;
+    size_t lAvailable;
+    size_t lTail;
+
+    lAvailable = usart_dma_rx_num();
+    lTail = sUsart2RxTail;
+
+    for(lCount = 0; lCount < lAvailable; lCount++, lTail = usart_dma_rx_inc_tail(lTail)) {
+        if((uint8_t)sUsart2RxBuffer[lTail] == inCharacter) {
+
+            sUsart2RxTail = usart_dma_rx_inc_tail(lTail);
+            break;
+        }
+    }
+}
+
 void   usart_dma_rx_clear(void) {
 
     sUsart2RxTail = usart_dma_rx_get_head();
