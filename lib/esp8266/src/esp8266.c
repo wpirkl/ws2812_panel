@@ -23,11 +23,24 @@
 #include "semphr.h"
 #endif /* ESP8266_FREERTOS */
 
-#define ESP8266_AT_CMD_AT       "AT\r\n"
-#define ESP8266_AT_CMD_RST      "AT+RST\r\n"
-#define ESP8266_AT_CMD_GMR      "AT+GMR\r\n"
+const uint8_t sCRLF[]   = { '\r', '\n' };
 
-const char sOK[] = "OK\r\n";
+const uint8_t sAT[]     = { 'A', 'T'};
+const uint8_t sATE0[]   = { 'A', 'T', 'E', '0' };
+const uint8_t sAT_RST[] = { 'A', 'T', '+', 'R', 'S', 'T' };
+const uint8_t sAT_GMR[] = { 'A', 'T', '+', 'G', 'M', 'R' };
+
+/* Wifi commands */
+const uint8_t sAT_CWMODE_CUR[] = { 'A', 'T', '+', 'C', 'W', 'M', 'O', 'D', 'E', '_', 'C', 'U', 'R', '=', '0' };
+const uint8_t sAT_CWJAP_CUR[]  = { 'A', 'T', '+', 'C', 'W', 'J', 'A', 'P', '_', 'C', 'U', 'R', '=' };
+
+const uint8_t sOK[]    = { '\r', '\n', 'O', 'K', '\r', '\n'};
+const uint8_t sERROR[] = { '\r', '\n', 'E', 'R', 'R', 'O', 'R', '\r', '\n' };
+const uint8_t sREADY[] = { 'r', 'e', 'a', 'd', 'y' };
+
+/* forward declarations */
+
+static void esp8266_set_sentinel(const uint8_t * const inSentinel, size_t inSentinelLen, const uint8_t * const inErrorSentinel, size_t inErrorSentinelLen);
 
 
 /*! Defines a rx packet
@@ -74,10 +87,16 @@ typedef struct s_esp8266 {
     size_t                      mTreated;
 
     /*! Sentinel String */
-    uint8_t                   * mSentinel;
+    const uint8_t             * mSentinel;
 
     /*! Length of the sentinel */
     size_t                      mSentinelLen;
+
+    /*! Error Sentinel String */
+    const uint8_t             * mErrorSentinel;
+
+    /*! Length of the error sentinel string */
+    size_t                      mErrorSentinelLen;
 
     /*! Response Buffer */
     uint8_t                   * mResponseBuffer;
@@ -87,6 +106,9 @@ typedef struct s_esp8266 {
 
     /*! Actual receive length */
     size_t                      mResponseRcvLen;
+
+    /*! Return value */
+    te_esp8266_cmd_ret          mStatus;
 
     /*! Socket objects */
     struct s_esp8266_socket     mSockets[ESP8266_MAX_CONNECTIONS];
@@ -108,7 +130,6 @@ void esp8266_init(void) {
 #if defined(ESP8266_FREERTOS)
     {
         size_t lCount;
-
 
         sEsp8266.mResponseSema = xSemaphoreCreateCounting(1, 0);
         assert_param(sEsp8266.mResponseSema != NULL);
@@ -235,45 +256,82 @@ static bool esp8266_rx_handle_socket(void) {
 }
 
 /*!
+    Handles generic command responses
+
+    \param[in]  inSentinel      The sentinel to match
+    \param[in]  inSentinelLen   The length of the sentinel
+
+    \retval true    Sentinel found and treated
+    \retval false   Sentinel not found
+*/
+static bool esp8266_rx_handle_command_response_gen(const uint8_t * const inSentinel, size_t inSentinelLen) {
+
+    /* received command response */
+    size_t lSize = usart_dma_match(inSentinel, inSentinelLen);
+    if(lSize > 0) {
+
+        if(sEsp8266.mResponseBuffer == NULL || sEsp8266.mResponseLen == 0) {
+
+            /* nobody want's the data, so drop it */
+            usart_dma_rx_skip(lSize);
+        } else {
+
+            /* assure the caller forsees enough memory */
+            assert_param(lSize <= sEsp8266.mResponseLen);
+
+            /* lSize <= sEsp8266.mResponseLen */
+            sEsp8266.mResponseRcvLen = usart_dma_read(sEsp8266.mResponseBuffer, lSize);
+
+            /* reset response buffer */
+            sEsp8266.mResponseBuffer = NULL;
+            sEsp8266.mResponseLen = 0;
+        }
+
+#if defined(ESP8266_FREERTOS)
+        /* notify caller */
+        xSemaphoreGive(sEsp8266.mResponseSema);
+#endif /* ESP8266_FREERTOS */
+
+        return true;
+    }
+
+    return false;
+}
+
+/*!
     This function handles incoming command responses
 */
 static bool esp8266_rx_handle_command_response(void) {
 
     if(sEsp8266.mSentinel != NULL && sEsp8266.mSentinelLen > 0) {
 
-        /* received command response */
-        size_t lSize = usart_dma_match(sEsp8266.mSentinel, sEsp8266.mSentinelLen);
-        if(lSize > 0) {
+        bool lReturnValue = false;
 
-            if(sEsp8266.mResponseBuffer == NULL || sEsp8266.mResponseLen == 0) {
+        lReturnValue = esp8266_rx_handle_command_response_gen(sEsp8266.mSentinel, sEsp8266.mSentinelLen);
+        if(lReturnValue) {
+            /* good response found */
+            esp8266_set_sentinel(NULL, 0, NULL, 0);
 
-                /* nobody want's the data, so drop it */
-                usart_dma_rx_skip(lSize);
-            } else {
-
-                /* assure the caller forsees enough memory */
-                assert_param(lSize <= sEsp8266.mResponseLen);
-
-                /* lSize <= sEsp8266.mResponseLen */
-                sEsp8266.mResponseRcvLen = usart_dma_read(sEsp8266.mResponseBuffer, lSize);
-
-                /* reset response buffer */
-                sEsp8266.mResponseBuffer = NULL;
-                sEsp8266.mResponseLen = 0;
-            }
-
-            /* reset sentinel */
-            sEsp8266.mSentinel = NULL;
-            sEsp8266.mSentinelLen = 0;
-
-#if defined(ESP8266_FREERTOS)
-            /* notify caller */
-            xSemaphoreGive(sEsp8266.mResponseSema);
-#endif /* ESP8266_FREERTOS */
-
-            return true;
+            sEsp8266.mStatus = ESP8266_OK;
         }
+
+        return lReturnValue;
     }
+
+    if(sEsp8266.mErrorSentinel != NULL && sEsp8266.mErrorSentinelLen > 0) {
+        bool lReturnValue = false;
+
+        lReturnValue = esp8266_rx_handle_command_response_gen(sEsp8266.mErrorSentinel, sEsp8266.mErrorSentinelLen);
+        if(lReturnValue) {
+            /* error found */
+            esp8266_set_sentinel(NULL, 0, NULL, 0);
+
+            sEsp8266.mStatus = ESP8266_ERROR;
+        }
+
+        return lReturnValue;
+    }
+
     return false;
 }
 
@@ -340,10 +398,13 @@ static void esp8266_set_response_buffer(uint8_t * inResponseBuffer, size_t inRes
     \param[in]  inSentinel      The sentinel string
     \param[in]  inSentinelLen   The length of the sentinel string
 */
-static void esp8266_set_sentinel(uint8_t * inSentinel, size_t inSentinelLen) {
+static void esp8266_set_sentinel(const uint8_t * const inSentinel, size_t inSentinelLen, const uint8_t * const inErrorSentinel, size_t inErrorSentinelLen) {
 
     sEsp8266.mSentinel    = inSentinel;
     sEsp8266.mSentinelLen = inSentinelLen;
+
+    sEsp8266.mErrorSentinel    = inErrorSentinel;
+    sEsp8266.mErrorSentinelLen = inErrorSentinelLen;
 }
 
 /*! Execute a command which just response OK or ERROR
@@ -354,7 +415,7 @@ static void esp8266_set_sentinel(uint8_t * inSentinel, size_t inSentinelLen) {
     \retval true        OK was returned
     \retval false       something else was returned
 */
-static bool esp8266_ok_cmd(uint8_t * inCommand, size_t inCommandLen) {
+static bool esp8266_ok_cmd(const uint8_t * const inCommand, size_t inCommandLen) {
 
     bool lReturnValue = false;
 
@@ -362,26 +423,79 @@ static bool esp8266_ok_cmd(uint8_t * inCommand, size_t inCommandLen) {
     if(xSemaphoreTakeRecursive(sEsp8266.mMutex, portMAX_DELAY)) {
 #endif
 
-        uint8_t lResponseBuffer[16];
-        size_t lResponseLen;
+        sEsp8266.mStatus = ESP8266_IN_PROGRESS;
 
-        /* set the sentinel to OK */
-        esp8266_set_sentinel(sOK, sizeof(sOK)-1);
+        /* set the sentinel to OK / ERROR */
+        esp8266_set_sentinel(sOK, sizeof(sOK), sERROR, sizeof(sERROR));
 
         /* set the response buffer */
-        esp8266_set_response_buffer(lResponseBuffer, sizeof(lResponseBuffer));
+        esp8266_set_response_buffer(NULL, 0);
 
         /* send command to esp8266 */
         usart_dma_write(inCommand, inCommandLen);
+
+        /* send cr + lf */
+        usart_dma_write(sCRLF, sizeof(sCRLF));
 
         /* wait on the answer */
 #if defined(ESP8266_FREERTOS)
         xSemaphoreTake(sEsp8266.mResponseSema, portMAX_DELAY);
 #endif
-        /* get the answer length */
-        lResponseLen = getResponseLength();
 
-        /* check if OK or something else was replied */
+        if(sEsp8266.mStatus == ESP8266_OK) {
+            lReturnValue = true;
+        }
+
+#if defined(ESP8266_FREERTOS)
+        xSemaphoreGiveRecursive(sEsp8266.mMutex);
+    }
+#endif
+
+    return lReturnValue;
+}
+
+/*! Execute a command which just response OK or ERROR
+
+    \param[in]  inCommand       The command string to send
+    \param[in]  inCommandLen    The length of the command string
+
+    \retval true        OK was returned
+    \retval false       something else was returned
+*/
+static bool esp8266_ok_cmd_str(const uint8_t * const inCommand, size_t inCommandLen, uint8_t * inOutData, size_t inDataMaxLen, size_t * outDataLen) {
+
+    bool lReturnValue = false;
+
+#if defined(ESP8266_FREERTOS)
+    if(xSemaphoreTakeRecursive(sEsp8266.mMutex, portMAX_DELAY)) {
+#endif
+
+        sEsp8266.mStatus = ESP8266_IN_PROGRESS;
+
+        /* set the sentinel to OK / ERROR */
+        esp8266_set_sentinel(sOK, sizeof(sOK), sERROR, sizeof(sERROR));
+
+        /* set the response buffer */
+        esp8266_set_response_buffer(inOutData, inDataMaxLen);
+
+        /* send command to esp8266 */
+        usart_dma_write(inCommand, inCommandLen);
+
+        /* send cr + lf */
+        usart_dma_write(sCRLF, sizeof(sCRLF));
+
+        /* wait on the answer */
+#if defined(ESP8266_FREERTOS)
+        xSemaphoreTake(sEsp8266.mResponseSema, portMAX_DELAY);
+#endif
+
+        /* get the length of the response */
+        *outDataLen = getResponseLength();
+
+        if(sEsp8266.mStatus == ESP8266_OK) {
+
+            lReturnValue = true;
+        }
 
 #if defined(ESP8266_FREERTOS)
         xSemaphoreGiveRecursive(sEsp8266.mMutex);
@@ -393,17 +507,103 @@ static bool esp8266_ok_cmd(uint8_t * inCommand, size_t inCommandLen) {
 
 bool esp8266_cmd_at(void) {
 
-    return false;
+    return esp8266_ok_cmd(sAT, sizeof(sAT));
 }
 
 bool esp8266_cmd_rst(void) {
 
-    return false;
+    bool lReturnValue = false;
+
+#if defined(ESP8266_FREERTOS)
+    if(xSemaphoreTakeRecursive(sEsp8266.mMutex, portMAX_DELAY)) {
+#endif
+
+        sEsp8266.mStatus = ESP8266_IN_PROGRESS;
+
+        /* set the sentinel to OK / ERROR */
+        esp8266_set_sentinel(sREADY, sizeof(sREADY), NULL, 0);
+
+        /* set the response buffer */
+        esp8266_set_response_buffer(NULL, 0);
+
+        /* send command to esp8266 */
+        usart_dma_write(sAT_RST, sizeof(sAT_RST));
+
+        /* send cr + lf */
+        usart_dma_write(sCRLF, sizeof(sCRLF));
+
+        /* wait on the answer */
+#if defined(ESP8266_FREERTOS)
+        xSemaphoreTake(sEsp8266.mResponseSema, portMAX_DELAY);
+#endif
+
+        if(sEsp8266.mStatus == ESP8266_OK) {
+            lReturnValue = true;
+        }
+
+#if defined(ESP8266_FREERTOS)
+        xSemaphoreGiveRecursive(sEsp8266.mMutex);
+    }
+#endif
+
+    return lReturnValue;
 }
 
-bool esp8266_cmd_gmr(void) {
+bool esp8266_cmd_gmr(uint8_t * outVersionInfo, size_t inVersionInfoMaxLen, size_t * outVersionInfoLen) {
 
-    return false;
+    return esp8266_ok_cmd_str(sAT_GMR, sizeof(sAT_GMR), outVersionInfo, inVersionInfoMaxLen, outVersionInfoLen);
 }
+
+bool esp8266_cmd_ate0(void) {
+
+    return esp8266_ok_cmd(sATE0, sizeof(sATE0));
+}
+
+bool esp8266_cmd_set_cwmode_cur(te_esp8266_wifi_mode inWifiMode) {
+
+    uint8_t lCommandBuffer[sizeof(sAT_CWMODE_CUR)];
+
+    memcpy(lCommandBuffer, sAT_CWMODE_CUR, sizeof(sAT_CWMODE_CUR) - 1);
+
+    switch(inWifiMode) {
+        case ESP8266_WIFI_MODE_STATION:
+            lCommandBuffer[sizeof(sAT_CWMODE_CUR)-1] = '1';
+            break;
+        case ESP8266_WIFI_MODE_AP:
+            lCommandBuffer[sizeof(sAT_CWMODE_CUR)-1] = '2';
+            break;
+        case ESP8266_WIFI_MODE_STA_AP:
+            lCommandBuffer[sizeof(sAT_CWMODE_CUR)-1] = '3';
+            break;
+        default:
+            return false;
+    }
+
+    return esp8266_ok_cmd(lCommandBuffer, sizeof(lCommandBuffer));
+}
+
+bool esp8266_cmd_set_cwjap_cur(uint8_t * inSSID, size_t inSSIDLen, uint8_t * inPWD, size_t inPWDLen) {
+
+    uint8_t lCommandBuffer[sizeof(sAT_CWJAP_CUR) + 1 + 31 + 1 + 1 + 1 + 64 + 1];    /* command length + quote + ssid + quote + comma + quote + password lenght + quote */
+    size_t  lLen = sizeof(sAT_CWJAP_CUR);
+
+    if(inSSIDLen > 31 || inPWDLen > 64) {
+        return false;
+    }
+
+    memcpy(lCommandBuffer, sAT_CWJAP_CUR, sizeof(sAT_CWJAP_CUR));
+
+    lCommandBuffer[lLen++] = '"';
+    memcpy(&lCommandBuffer[lLen], inSSID, inSSIDLen);
+    lLen += inSSIDLen;
+    lCommandBuffer[lLen++] = '"';
+    lCommandBuffer[lLen++] = ',';
+    lCommandBuffer[lLen++] = '"';
+    memcpy(&lCommandBuffer[lLen], inPWD, inPWDLen);
+    lCommandBuffer[lLen++] = '"';
+
+    return esp8266_ok_cmd(lCommandBuffer, lLen);
+}
+
 
 /* eof */
