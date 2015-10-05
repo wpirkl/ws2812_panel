@@ -36,6 +36,8 @@ const uint8_t sAT_CWJAP_CUR[]  = { 'A', 'T', '+', 'C', 'W', 'J', 'A', 'P', '_', 
 const uint8_t sAT_CWLAP[]      = { 'A', 'T', '+', 'C', 'W', 'L', 'A', 'P' };
 const uint8_t sAT_CWQAP[]      = { 'A', 'T', '+', 'C', 'W', 'Q', 'A', 'P' };
 const uint8_t sAT_CWSAP_CUR[]  = { 'A', 'T', '+', 'C', 'W', 'S', 'A', 'P', '_', 'C', 'U', 'R', '=' };
+const uint8_t sAT_CWLIF[]      = { 'A', 'T', '+', 'C', 'W', 'L', 'I', 'F' };
+const uint8_t sAT_CWDHCP_CUR[] = { 'A', 'T', '+', 'C', 'W', 'D', 'H', 'C', 'P', '_', 'C', 'U', 'R', '=' };
 
 const uint8_t sOK[]    = { '\r', '\n', 'O', 'K', '\r', '\n'};
 const uint8_t sERROR[] = { '\r', '\n', 'E', 'R', 'R', 'O', 'R', '\r', '\n' };
@@ -280,10 +282,13 @@ static bool esp8266_rx_handle_command_response_gen(const uint8_t * const inSenti
         } else {
 
             /* assure the caller forsees enough memory */
-            assert_param(lSize <= sEsp8266.mResponseLen);
+            assert_param(lSize - inSentinelLen <= sEsp8266.mResponseLen);
 
-            /* lSize <= sEsp8266.mResponseLen */
-            sEsp8266.mResponseRcvLen = usart_dma_read(sEsp8266.mResponseBuffer, lSize);
+            /* lSize - inSentinelLen <= sEsp8266.mResponseLen */
+            sEsp8266.mResponseRcvLen = usart_dma_read(sEsp8266.mResponseBuffer, lSize - inSentinelLen);
+
+            /* Exclude sentinel */
+            usart_dma_rx_skip(inSentinelLen);
 
             /* reset response buffer */
             sEsp8266.mResponseBuffer = NULL;
@@ -618,7 +623,7 @@ bool esp8266_cmd_cwqap(void) {
     return esp8266_ok_cmd(sAT_CWQAP, sizeof(sAT_CWQAP));
 }
 
-bool esp8266_cmd_cwsap_cur(uint8_t * inSSID, size_t inSSIDLen, uint8_t * inPWD, size_t inPWDLen, uint8_t inChannel, te_esp8266_encryption_mode inEncryption) {
+bool esp8266_cmd_set_cwsap_cur(uint8_t * inSSID, size_t inSSIDLen, uint8_t * inPWD, size_t inPWDLen, uint8_t inChannel, te_esp8266_encryption_mode inEncryption) {
 
     uint8_t lCommandBuffer[sizeof(sAT_CWSAP_CUR) + 1 + 31 + 1 + 1 + 1 + 64 + 1 + 1 + 2 + 1 + 1 ];    /* command length + quote + ssid + quote + comma + quote + password lenght + quote + comma + channel + comma + enc mode */
     size_t  lLen = sizeof(sAT_CWSAP_CUR);
@@ -671,5 +676,42 @@ bool esp8266_cmd_cwsap_cur(uint8_t * inSSID, size_t inSSIDLen, uint8_t * inPWD, 
     return esp8266_ok_cmd(lCommandBuffer, lLen);
 }
 
+bool esp8266_cmd_get_cwlif(uint8_t * outStationList, size_t inStationListMaxLen, size_t * outStationListLen) {
+
+    return esp8266_ok_cmd_str(sAT_CWLIF, sizeof(sAT_CWLIF), outStationList, inStationListMaxLen, outStationListLen);
+}
+
+bool esp8266_cmd_set_cwdhcp(te_esp8266_dhcp_mode inDHCPMode, bool inEnable) {
+
+    uint8_t lCommandBuffer[sizeof(sAT_CWDHCP_CUR) + 1 + 1 + 1];  /* command + mode + comma + ena/disa */
+    size_t  lLen = sizeof(sAT_CWDHCP_CUR);
+    uint8_t lMode;
+
+    switch(inDHCPMode) {
+        case ESP8266_DHCP_MODE_AP:
+            lMode = '0';
+            break;
+        case ESP8266_DHCP_MODE_STATION:
+            lMode = '1';
+            break;
+        case ESP8266_DHCP_MODE_AP_STA:
+            lMode = '2';
+            break;
+        default:
+            return false;
+    }
+
+    memcpy(lCommandBuffer, sAT_CWDHCP_CUR, sizeof(sAT_CWDHCP_CUR));
+
+    lCommandBuffer[lLen++] = lMode;
+    lCommandBuffer[lLen++] = ',';
+    if(inEnable) {
+        lCommandBuffer[lLen++] = '1';
+    } else {
+        lCommandBuffer[lLen++] = '0';
+    }
+
+    return esp8266_ok_cmd(lCommandBuffer, lLen);
+}
 
 /* eof */

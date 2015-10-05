@@ -38,6 +38,16 @@ typedef enum {
     ESP8266_ENC_MODE_WPA_WPA2_PSK   = 4,
 } te_esp8266_encryption_mode;
 
+/*! Defines the dhcp mode */
+typedef enum {
+    /*! Access point */
+    ESP8266_DHCP_MODE_AP        = 0,
+    /*! Station */
+    ESP8266_DHCP_MODE_STATION   = 1,
+    /*! Access point and station */
+    ESP8266_DHCP_MODE_AP_STA    = 2,
+} te_esp8266_dhcp_mode;
+
 
 /*! socket structure */
 typedef struct s_esp8266_socket ts_esp8266_socket;
@@ -153,7 +163,35 @@ bool esp8266_cmd_cwqap(void);
     \retval true    Successful completion
     \retval false   Failed
 */
-bool esp8266_cmd_cwsap_cur(uint8_t * inSSID, size_t inSSIDLen, uint8_t * inPWD, size_t inPWDLen, uint8_t inChannel, te_esp8266_encryption_mode inEncryption);
+bool esp8266_cmd_set_cwsap_cur(uint8_t * inSSID, size_t inSSIDLen, uint8_t * inPWD, size_t inPWDLen, uint8_t inChannel, te_esp8266_encryption_mode inEncryption);
+
+
+/*! List esp8266 wifi access point connected stations
+
+    \param[out] outStationList      Buffer which gets filled by this function
+    \param[in]  inStationListMaxLen Maximum number of bytes which gets filled by this function
+    \param[out] outStationListLen   Length of the data in the buffer
+
+    \retval true    Successful completion
+    \retval false   Failed
+*/
+bool esp8266_cmd_get_cwlif(uint8_t * outStationList, size_t inStationListMaxLen, size_t * outStationListLen);
+
+
+/*! Set esp8266 dhcp mode
+
+    \param[in]  inDHCPMode      Mode of DHCP
+    \param[in]  inEnable        true: enable, false: disable
+
+    \retval true    Successful completion
+    \retval false   Failed
+*/
+bool esp8266_cmd_set_cwdhcp(te_esp8266_dhcp_mode inDHCPMode, bool inEnable);
+
+
+
+
+
 
 #endif /* ESP8266_H_ */
 
