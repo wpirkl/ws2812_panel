@@ -58,7 +58,7 @@ size_t usart_dma_read_until(uint8_t * inBuffer, size_t inMaxNumBytes, uint8_t in
 
     \retval     The number of bytes read
 */
-size_t usart_dma_read_until_str(uint8_t * inBuffer, size_t inMaxNumBytes, size_t inStartOffset, uint8_t * inString, size_t inStringLength);
+size_t usart_dma_read_until_str(uint8_t * inBuffer, size_t inMaxNumBytes, size_t inStartOffset, const uint8_t * inString, size_t inStringLength);
 
 
 /*!
@@ -69,8 +69,8 @@ size_t usart_dma_read_until_str(uint8_t * inBuffer, size_t inMaxNumBytes, size_t
 
     \retval     true: if the buffer starts with the string, false if it doesn't
 */
-bool usart_dma_peek(uint8_t * inString, size_t inStringLength);
-
+bool usart_dma_peek(const uint8_t * inString, size_t inStringLength);
+ 
 
 /*!
     Check if the buffer ends with a certain pattern
@@ -80,7 +80,7 @@ bool usart_dma_peek(uint8_t * inString, size_t inStringLength);
 
     \retval     true: if the buffer ends with the string, false if it doesn't
 */
-bool usart_dma_peek_end(uint8_t * inString, size_t inStringLength);
+bool usart_dma_peek_end(const uint8_t * inString, size_t inStringLength);
 
 
 /*!
@@ -92,7 +92,7 @@ bool usart_dma_peek_end(uint8_t * inString, size_t inStringLength);
     \retval     0   string not found
     \retval     >0  Length to retreive including inString
 */
-size_t usart_dma_match(uint8_t * inString, size_t inStringLength);
+size_t usart_dma_match(const uint8_t * inString, size_t inStringLength);
 
 
 /*!
@@ -121,7 +121,7 @@ void usart_dma_rx_skip_until(uint8_t inCharacter);
 
     \retval The number of bytes actually sent
 */
-size_t usart_dma_write(uint8_t * inBuffer, size_t inNumBytes);
+size_t usart_dma_write(const uint8_t * const inBuffer, size_t inNumBytes);
 
 /*!
     Flush all received characters

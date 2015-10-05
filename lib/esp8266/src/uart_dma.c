@@ -218,7 +218,7 @@ size_t usart_dma_read_until(uint8_t * inBuffer, size_t inMaxNumBytes, uint8_t in
     return lCount;
 }
 
-size_t usart_dma_read_until_str(uint8_t * inBuffer, size_t inMaxNumBytes, size_t inStartOffset, uint8_t * inString, size_t inStringLength) {
+size_t usart_dma_read_until_str(uint8_t * inBuffer, size_t inMaxNumBytes, size_t inStartOffset, const uint8_t * inString, size_t inStringLength) {
  
     size_t lAvailable;
     size_t lCount;
@@ -248,7 +248,7 @@ size_t usart_dma_read_until_str(uint8_t * inBuffer, size_t inMaxNumBytes, size_t
     return lCount;
 }
 
-bool usart_dma_peek(uint8_t * inString, size_t inStringLength) {
+bool usart_dma_peek(const uint8_t * inString, size_t inStringLength) {
 
     size_t lAvailable;
     size_t lTail;
@@ -275,7 +275,7 @@ bool usart_dma_peek(uint8_t * inString, size_t inStringLength) {
     return true;
 }
 
-bool usart_dma_peek_end(uint8_t * inString, size_t inStringLength) {
+bool usart_dma_peek_end(const uint8_t * inString, size_t inStringLength) {
 
     size_t lAvailable;
     size_t lHead;
@@ -299,7 +299,7 @@ bool usart_dma_peek_end(uint8_t * inString, size_t inStringLength) {
     return true;
 }
 
-size_t usart_dma_match(uint8_t * inString, size_t inStringLength) {
+size_t usart_dma_match(const uint8_t * inString, size_t inStringLength) {
 
     size_t lAvailable;
     size_t lTail;
@@ -388,7 +388,7 @@ static DMA_InitTypeDef sDMA_InitStructureTx = {
     .DMA_Priority           = DMA_Priority_Medium,              /* Normal priority */
 };
 
-size_t usart_dma_write(uint8_t * inBuffer, size_t inNumBytes) {
+size_t usart_dma_write(const uint8_t * const inBuffer, size_t inNumBytes) {
 
     size_t lStartIndex;
     size_t lSendSize = 0;
