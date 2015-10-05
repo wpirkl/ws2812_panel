@@ -33,6 +33,9 @@ const uint8_t sAT_GMR[] = { 'A', 'T', '+', 'G', 'M', 'R' };
 /* Wifi commands */
 const uint8_t sAT_CWMODE_CUR[] = { 'A', 'T', '+', 'C', 'W', 'M', 'O', 'D', 'E', '_', 'C', 'U', 'R', '=', '0' };
 const uint8_t sAT_CWJAP_CUR[]  = { 'A', 'T', '+', 'C', 'W', 'J', 'A', 'P', '_', 'C', 'U', 'R', '=' };
+const uint8_t sAT_CWLAP[]      = { 'A', 'T', '+', 'C', 'W', 'L', 'A', 'P' };
+const uint8_t sAT_CWQAP[]      = { 'A', 'T', '+', 'C', 'W', 'Q', 'A', 'P' };
+const uint8_t sAT_CWSAP_CUR[]  = { 'A', 'T', '+', 'C', 'W', 'S', 'A', 'P', '_', 'C', 'U', 'R', '=' };
 
 const uint8_t sOK[]    = { '\r', '\n', 'O', 'K', '\r', '\n'};
 const uint8_t sERROR[] = { '\r', '\n', 'E', 'R', 'R', 'O', 'R', '\r', '\n' };
@@ -601,6 +604,69 @@ bool esp8266_cmd_set_cwjap_cur(uint8_t * inSSID, size_t inSSIDLen, uint8_t * inP
     lCommandBuffer[lLen++] = '"';
     memcpy(&lCommandBuffer[lLen], inPWD, inPWDLen);
     lCommandBuffer[lLen++] = '"';
+
+    return esp8266_ok_cmd(lCommandBuffer, lLen);
+}
+
+bool esp8266_cmd_get_cwlap(uint8_t * outAccessPointList, size_t inAccessPointListMaxLen, size_t * outAccessPointListLen) {
+
+    return esp8266_ok_cmd_str(sAT_CWLAP, sizeof(sAT_CWLAP), outAccessPointList, inAccessPointListMaxLen, outAccessPointListLen);
+}
+
+bool esp8266_cmd_cwqap(void) {
+
+    return esp8266_ok_cmd(sAT_CWQAP, sizeof(sAT_CWQAP));
+}
+
+bool esp8266_cmd_cwsap_cur(uint8_t * inSSID, size_t inSSIDLen, uint8_t * inPWD, size_t inPWDLen, uint8_t inChannel, te_esp8266_encryption_mode inEncryption) {
+
+    uint8_t lCommandBuffer[sizeof(sAT_CWSAP_CUR) + 1 + 31 + 1 + 1 + 1 + 64 + 1 + 1 + 2 + 1 + 1 ];    /* command length + quote + ssid + quote + comma + quote + password lenght + quote + comma + channel + comma + enc mode */
+    size_t  lLen = sizeof(sAT_CWSAP_CUR);
+
+    uint8_t lMode;
+
+    if(inSSIDLen > 31 || inPWDLen > 64) {
+        return false;
+    }
+
+    if(inChannel < 1 || inChannel > 14) {
+        return false;
+    }
+
+    switch(inEncryption) {
+        case ESP8266_ENC_MODE_OPEN:
+            lMode = '0';
+            break;
+        case ESP8266_ENC_MODE_WPA_PSK:
+            lMode = '2';
+            break;
+        case ESP8266_ENC_MODE_WPA2_PSK:
+            lMode = '3';
+            break;
+        case ESP8266_ENC_MODE_WPA_WPA2_PSK:
+            lMode = '4';
+            break;
+        default:
+            return false;
+    }
+
+    memcpy(lCommandBuffer, sAT_CWSAP_CUR, sizeof(sAT_CWSAP_CUR));
+
+    lCommandBuffer[lLen++] = '"';
+    memcpy(&lCommandBuffer[lLen], inSSID, inSSIDLen);
+    lLen += inSSIDLen;
+    lCommandBuffer[lLen++] = '"';
+    lCommandBuffer[lLen++] = ',';
+    lCommandBuffer[lLen++] = '"';
+    memcpy(&lCommandBuffer[lLen], inPWD, inPWDLen);
+    lCommandBuffer[lLen++] = '"';
+
+    if(inChannel >= 10) {
+        lCommandBuffer[lLen++] = '1';
+    }
+    lCommandBuffer[lLen++] = '0' + (inChannel % 10);
+    lCommandBuffer[lLen++] = ',';
+    lCommandBuffer[lLen++] = lMode;
 
     return esp8266_ok_cmd(lCommandBuffer, lLen);
 }

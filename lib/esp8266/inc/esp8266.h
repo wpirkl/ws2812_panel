@@ -26,6 +26,18 @@ typedef enum {
     ESP8266_WIFI_MODE_STA_AP    = 3,
 } te_esp8266_wifi_mode;
 
+/*! Defines the encryption mode */
+typedef enum {
+    /*! Open */
+    ESP8266_ENC_MODE_OPEN           = 0,
+    /*! WPA PSK */
+    ESP8266_ENC_MODE_WPA_PSK        = 2,
+    /*! WPA2 PSK */
+    ESP8266_ENC_MODE_WPA2_PSK       = 3,
+    /*! WPA2 PSK */
+    ESP8266_ENC_MODE_WPA_WPA2_PSK   = 4,
+} te_esp8266_encryption_mode;
+
 
 /*! socket structure */
 typedef struct s_esp8266_socket ts_esp8266_socket;
@@ -109,7 +121,39 @@ bool esp8266_cmd_set_cwmode_cur(te_esp8266_wifi_mode inWifiMode);
 bool esp8266_cmd_set_cwjap_cur(uint8_t * inSSID, size_t inSSIDLen, uint8_t * inPWD, size_t inPWDLen);
 
 
+/*! List esp8266 wifi access points
 
+    \param[out] outAccessPointList      Buffer which gets filled by this function
+    \param[in]  inAccessPointListMaxLen Maximum number of bytes which gets filled by this function
+    \param[out] outAccessPointListLen   Length of the data in the buffer
+
+    \retval true    Successful completion
+    \retval false   Failed
+*/
+bool esp8266_cmd_get_cwlap(uint8_t * outAccessPointList, size_t inAccessPointListMaxLen, size_t * outAccessPointListLen);
+
+
+/*! Quit esp8266 wifi access point
+
+    \retval true    Successful completion
+    \retval false   Failed
+*/
+bool esp8266_cmd_cwqap(void);
+
+
+/*! Set esp9266 soft ap mode
+
+    \param[in]  inSSID          The ssid to join (max 31 byte)
+    \param[in]  inSSIDLen       The lenght of the ssid
+    \param[in]  inPWD           The password (max 64 byte)
+    \param[in]  inPWDLen        The length of the password
+    \param[in]  inChannel       The channel to use
+    \param[in]  inEncryption    The encryption to use
+
+    \retval true    Successful completion
+    \retval false   Failed
+*/
+bool esp8266_cmd_cwsap_cur(uint8_t * inSSID, size_t inSSIDLen, uint8_t * inPWD, size_t inPWDLen, uint8_t inChannel, te_esp8266_encryption_mode inEncryption);
 
 #endif /* ESP8266_H_ */
 
