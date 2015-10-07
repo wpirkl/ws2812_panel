@@ -31,7 +31,8 @@
 
 const uint8_t sCRLF[]   = { '\r', '\n' };
 
-const uint8_t sBadCmd[] = { 'A', 'D' };
+/*! Just for testing */
+const uint8_t sBadCmd[] = { 'A', 'A' };
 
 const uint8_t sAT[]     = { 'A', 'T' };
 const uint8_t sATE0[]   = { 'A', 'T', 'E', '0' };
@@ -320,36 +321,41 @@ static bool esp8266_rx_handle_command_response_gen(const uint8_t * const inSenti
 */
 static bool esp8266_rx_handle_command_response(void) {
 
+    bool lReturnValue = false;
+
     if(sEsp8266.mSentinel != NULL && sEsp8266.mSentinelLen > 0) {
 
-        bool lReturnValue = false;
 
+        dbg("Check good sentinel\r\n");
         lReturnValue = esp8266_rx_handle_command_response_gen(sEsp8266.mSentinel, sEsp8266.mSentinelLen);
         if(lReturnValue) {
             /* good response found */
+            dbg("Good sentinel found\r\n");
             esp8266_set_sentinel(NULL, 0, NULL, 0);
 
             sEsp8266.mStatus = ESP8266_OK;
-        }
 
-        return lReturnValue;
+            return true;
+        }
     }
 
     if(sEsp8266.mErrorSentinel != NULL && sEsp8266.mErrorSentinelLen > 0) {
         bool lReturnValue = false;
 
+        dbg("Check error sentinel\r\n");
         lReturnValue = esp8266_rx_handle_command_response_gen(sEsp8266.mErrorSentinel, sEsp8266.mErrorSentinelLen);
         if(lReturnValue) {
             /* error found */
+            dbg("Error sentinel found\r\n");
             esp8266_set_sentinel(NULL, 0, NULL, 0);
 
             sEsp8266.mStatus = ESP8266_ERROR;
-        }
 
-        return lReturnValue;
+            return true;
+        }
     }
 
-    return false;
+    return lReturnValue;
 }
 
 void esp8266_rx_handler(void) {
@@ -464,6 +470,7 @@ static bool esp8266_ok_cmd(const uint8_t * const inCommand, size_t inCommandLen,
         if(!xSemaphoreTake(sEsp8266.mResponseSema, inTimeoutMs / portTICK_PERIOD_MS)) {
             esp8266_set_sentinel(NULL, 0, NULL, 0);
             sEsp8266.mStatus = ESP8266_TIMEOUT;
+            dbg("Timeout\r\n");
         }
 #endif
 
@@ -514,6 +521,7 @@ static bool esp8266_ok_cmd_str(const uint8_t * const inCommand, size_t inCommand
         if(!xSemaphoreTake(sEsp8266.mResponseSema, inTimeoutMs / portTICK_PERIOD_MS)) {
             esp8266_set_sentinel(NULL, 0, NULL, 0);
             sEsp8266.mStatus = ESP8266_TIMEOUT;
+            dbg("Timeout\r\n");
         }
 #endif
 
@@ -535,7 +543,7 @@ static bool esp8266_ok_cmd_str(const uint8_t * const inCommand, size_t inCommand
 
 bool esp8266_bad_cmd(void) {
 
-    return esp8266_ok_cmd(sBadCmd, sizeof(sBadCmd), 1000);
+    return esp8266_ok_cmd(sBadCmd, sizeof(sBadCmd), 4000);
 }
 
 bool esp8266_cmd_at(void) {
@@ -570,6 +578,7 @@ bool esp8266_cmd_rst(void) {
         if(!xSemaphoreTake(sEsp8266.mResponseSema, 2000 / portTICK_PERIOD_MS)) {
             esp8266_set_sentinel(NULL, 0, NULL, 0);
             sEsp8266.mStatus = ESP8266_TIMEOUT;
+            dbg("Timeout\r\n");
         }
 #endif
 
