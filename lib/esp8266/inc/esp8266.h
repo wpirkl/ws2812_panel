@@ -72,6 +72,16 @@ void esp8266_rx_handler(void);
 void esp8266_setup(void);
 
 
+/*! Test if this library works by sending down a mal-formatted command
+
+    \note this command should fail
+
+    \retval true    Successful completion
+    \retval false   Failed
+*/
+bool esp8266_bad_cmd(void);
+
+
 /*! Test esp8266 startup
 
     \retval true    Successful completion

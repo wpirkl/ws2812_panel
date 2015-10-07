@@ -4,11 +4,17 @@
 #include <stdbool.h>
 #include <stdlib.h>
 #include <string.h>
+#include <stdio.h>
 
 #include "stm32f4xx_conf.h"     /* for assert_param */
 
 #include "esp8266.h"
 #include "uart_dma.h"
+
+#define dbg_on(x...)      printf(x)
+#define dbg_off(x...)
+
+#define dbg dbg_off
 
 
 #define ESP8266_MAX_CONNECTIONS         (5)
@@ -25,7 +31,9 @@
 
 const uint8_t sCRLF[]   = { '\r', '\n' };
 
-const uint8_t sAT[]     = { 'A', 'T'};
+const uint8_t sBadCmd[] = { 'A', 'D' };
+
+const uint8_t sAT[]     = { 'A', 'T' };
 const uint8_t sATE0[]   = { 'A', 'T', 'E', '0' };
 const uint8_t sAT_RST[] = { 'A', 'T', '+', 'R', 'S', 'T' };
 const uint8_t sAT_GMR[] = { 'A', 'T', '+', 'G', 'M', 'R' };
@@ -41,7 +49,7 @@ const uint8_t sAT_CWDHCP_CUR[] = { 'A', 'T', '+', 'C', 'W', 'D', 'H', 'C', 'P', 
 
 const uint8_t sOK[]    = { '\r', '\n', 'O', 'K', '\r', '\n'};
 const uint8_t sERROR[] = { '\r', '\n', 'E', 'R', 'R', 'O', 'R', '\r', '\n' };
-const uint8_t sREADY[] = { 'r', 'e', 'a', 'd', 'y' };
+const uint8_t sREADY[] = { 'r', 'e', 'a', 'd', 'y', '\r', '\n' };
 
 /* forward declarations */
 
@@ -166,6 +174,7 @@ static bool esp8266_rx_handle_ipd(void) {
     uint8_t lNumberBuffer[12];
 
     if(usart_dma_peek((uint8_t*)"\r\n+IPD,", 7)) {
+
         /* we already know it start's with \r\n+IPD, */
         usart_dma_rx_skip(7);
 
@@ -349,25 +358,30 @@ void esp8266_rx_handler(void) {
 
 #if defined(ESP8266_FREERTOS)
     for(;usart_dma_rx_num() == sEsp8266.mTreated;) {
+
+        dbg("RXH: Waiting for data\r\n");
+
         /* only wait if there's data we didn't treat before */
         usart_dma_rx_wait();
     }
 #endif /* ESP8266_FREERTOS */
 
+    dbg("RXH: Received data: %d\r\n", usart_dma_rx_num());
+
     do {
         lTreated = false;
 
         /* handle socket receive */
-        lTreated = lTreated || esp8266_rx_handle_ipd();
+        lTreated = esp8266_rx_handle_ipd() || lTreated;
 
         /* handle WIFI ... messages */
-        lTreated = lTreated || esp8266_rx_handle_wifi();
+        lTreated = esp8266_rx_handle_wifi() || lTreated;
 
         /* handle socket connect / close */
-        lTreated = lTreated || esp8266_rx_handle_socket();
+        lTreated = esp8266_rx_handle_socket() || lTreated;
 
         /* handle command response */
-        lTreated = lTreated || esp8266_rx_handle_command_response();
+        lTreated = esp8266_rx_handle_command_response() || lTreated;
 
     } while(lTreated);  /* treat as long as we can */
 
@@ -423,7 +437,7 @@ static void esp8266_set_sentinel(const uint8_t * const inSentinel, size_t inSent
     \retval true        OK was returned
     \retval false       something else was returned
 */
-static bool esp8266_ok_cmd(const uint8_t * const inCommand, size_t inCommandLen) {
+static bool esp8266_ok_cmd(const uint8_t * const inCommand, size_t inCommandLen, uint32_t inTimeoutMs) {
 
     bool lReturnValue = false;
 
@@ -447,7 +461,10 @@ static bool esp8266_ok_cmd(const uint8_t * const inCommand, size_t inCommandLen)
 
         /* wait on the answer */
 #if defined(ESP8266_FREERTOS)
-        xSemaphoreTake(sEsp8266.mResponseSema, portMAX_DELAY);
+        if(!xSemaphoreTake(sEsp8266.mResponseSema, inTimeoutMs / portTICK_PERIOD_MS)) {
+            esp8266_set_sentinel(NULL, 0, NULL, 0);
+            sEsp8266.mStatus = ESP8266_TIMEOUT;
+        }
 #endif
 
         if(sEsp8266.mStatus == ESP8266_OK) {
@@ -470,7 +487,7 @@ static bool esp8266_ok_cmd(const uint8_t * const inCommand, size_t inCommandLen)
     \retval true        OK was returned
     \retval false       something else was returned
 */
-static bool esp8266_ok_cmd_str(const uint8_t * const inCommand, size_t inCommandLen, uint8_t * inOutData, size_t inDataMaxLen, size_t * outDataLen) {
+static bool esp8266_ok_cmd_str(const uint8_t * const inCommand, size_t inCommandLen, uint8_t * inOutData, size_t inDataMaxLen, size_t * outDataLen, uint32_t inTimeoutMs) {
 
     bool lReturnValue = false;
 
@@ -494,7 +511,10 @@ static bool esp8266_ok_cmd_str(const uint8_t * const inCommand, size_t inCommand
 
         /* wait on the answer */
 #if defined(ESP8266_FREERTOS)
-        xSemaphoreTake(sEsp8266.mResponseSema, portMAX_DELAY);
+        if(!xSemaphoreTake(sEsp8266.mResponseSema, inTimeoutMs / portTICK_PERIOD_MS)) {
+            esp8266_set_sentinel(NULL, 0, NULL, 0);
+            sEsp8266.mStatus = ESP8266_TIMEOUT;
+        }
 #endif
 
         /* get the length of the response */
@@ -513,9 +533,14 @@ static bool esp8266_ok_cmd_str(const uint8_t * const inCommand, size_t inCommand
     return lReturnValue;
 }
 
+bool esp8266_bad_cmd(void) {
+
+    return esp8266_ok_cmd(sBadCmd, sizeof(sBadCmd), 1000);
+}
+
 bool esp8266_cmd_at(void) {
 
-    return esp8266_ok_cmd(sAT, sizeof(sAT));
+    return esp8266_ok_cmd(sAT, sizeof(sAT), 1000);
 }
 
 bool esp8266_cmd_rst(void) {
@@ -542,7 +567,10 @@ bool esp8266_cmd_rst(void) {
 
         /* wait on the answer */
 #if defined(ESP8266_FREERTOS)
-        xSemaphoreTake(sEsp8266.mResponseSema, portMAX_DELAY);
+        if(!xSemaphoreTake(sEsp8266.mResponseSema, 2000 / portTICK_PERIOD_MS)) {
+            esp8266_set_sentinel(NULL, 0, NULL, 0);
+            sEsp8266.mStatus = ESP8266_TIMEOUT;
+        }
 #endif
 
         if(sEsp8266.mStatus == ESP8266_OK) {
@@ -559,12 +587,12 @@ bool esp8266_cmd_rst(void) {
 
 bool esp8266_cmd_gmr(uint8_t * outVersionInfo, size_t inVersionInfoMaxLen, size_t * outVersionInfoLen) {
 
-    return esp8266_ok_cmd_str(sAT_GMR, sizeof(sAT_GMR), outVersionInfo, inVersionInfoMaxLen, outVersionInfoLen);
+    return esp8266_ok_cmd_str(sAT_GMR, sizeof(sAT_GMR), outVersionInfo, inVersionInfoMaxLen, outVersionInfoLen, 1000);
 }
 
 bool esp8266_cmd_ate0(void) {
 
-    return esp8266_ok_cmd(sATE0, sizeof(sATE0));
+    return esp8266_ok_cmd(sATE0, sizeof(sATE0), 1000);
 }
 
 bool esp8266_cmd_set_cwmode_cur(te_esp8266_wifi_mode inWifiMode) {
@@ -587,7 +615,7 @@ bool esp8266_cmd_set_cwmode_cur(te_esp8266_wifi_mode inWifiMode) {
             return false;
     }
 
-    return esp8266_ok_cmd(lCommandBuffer, sizeof(lCommandBuffer));
+    return esp8266_ok_cmd(lCommandBuffer, sizeof(lCommandBuffer), 1000);
 }
 
 bool esp8266_cmd_set_cwjap_cur(uint8_t * inSSID, size_t inSSIDLen, uint8_t * inPWD, size_t inPWDLen) {
@@ -610,17 +638,17 @@ bool esp8266_cmd_set_cwjap_cur(uint8_t * inSSID, size_t inSSIDLen, uint8_t * inP
     memcpy(&lCommandBuffer[lLen], inPWD, inPWDLen);
     lCommandBuffer[lLen++] = '"';
 
-    return esp8266_ok_cmd(lCommandBuffer, lLen);
+    return esp8266_ok_cmd(lCommandBuffer, lLen, 1000);
 }
 
 bool esp8266_cmd_get_cwlap(uint8_t * outAccessPointList, size_t inAccessPointListMaxLen, size_t * outAccessPointListLen) {
 
-    return esp8266_ok_cmd_str(sAT_CWLAP, sizeof(sAT_CWLAP), outAccessPointList, inAccessPointListMaxLen, outAccessPointListLen);
+    return esp8266_ok_cmd_str(sAT_CWLAP, sizeof(sAT_CWLAP), outAccessPointList, inAccessPointListMaxLen, outAccessPointListLen, 1000);
 }
 
 bool esp8266_cmd_cwqap(void) {
 
-    return esp8266_ok_cmd(sAT_CWQAP, sizeof(sAT_CWQAP));
+    return esp8266_ok_cmd(sAT_CWQAP, sizeof(sAT_CWQAP), 1000);
 }
 
 bool esp8266_cmd_set_cwsap_cur(uint8_t * inSSID, size_t inSSIDLen, uint8_t * inPWD, size_t inPWDLen, uint8_t inChannel, te_esp8266_encryption_mode inEncryption) {
@@ -673,12 +701,12 @@ bool esp8266_cmd_set_cwsap_cur(uint8_t * inSSID, size_t inSSIDLen, uint8_t * inP
     lCommandBuffer[lLen++] = ',';
     lCommandBuffer[lLen++] = lMode;
 
-    return esp8266_ok_cmd(lCommandBuffer, lLen);
+    return esp8266_ok_cmd(lCommandBuffer, lLen, 1000);
 }
 
 bool esp8266_cmd_get_cwlif(uint8_t * outStationList, size_t inStationListMaxLen, size_t * outStationListLen) {
 
-    return esp8266_ok_cmd_str(sAT_CWLIF, sizeof(sAT_CWLIF), outStationList, inStationListMaxLen, outStationListLen);
+    return esp8266_ok_cmd_str(sAT_CWLIF, sizeof(sAT_CWLIF), outStationList, inStationListMaxLen, outStationListLen, 1000);
 }
 
 bool esp8266_cmd_set_cwdhcp(te_esp8266_dhcp_mode inDHCPMode, bool inEnable) {
@@ -711,7 +739,7 @@ bool esp8266_cmd_set_cwdhcp(te_esp8266_dhcp_mode inDHCPMode, bool inEnable) {
         lCommandBuffer[lLen++] = '0';
     }
 
-    return esp8266_ok_cmd(lCommandBuffer, lLen);
+    return esp8266_ok_cmd(lCommandBuffer, lLen, 1000);
 }
 
 /* eof */
