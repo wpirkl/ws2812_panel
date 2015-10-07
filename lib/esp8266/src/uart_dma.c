@@ -28,6 +28,10 @@
 
 #define USART_DMA_FREERTOS
 
+#define dbg_on(x...)      printf(x)
+#define dbg_off(x...)
+
+#define dbg dbg_off
 
 #if defined(USART_DMA_FREERTOS)
 #include "FreeRTOS.h"
@@ -316,12 +320,13 @@ size_t usart_dma_match(const uint8_t * inString, size_t inStringLength) {
 
     lTail = sUsart2RxTail;
     lOldTail = lTail;
-    for(lCount = 0; lCount < lAvailable - inStringLength; lCount++, lTail = usart_dma_rx_inc_tail(lOldTail)) {
+    for(lCount = 0; lCount <= lAvailable - inStringLength; lCount++, lTail = usart_dma_rx_inc_tail(lOldTail)) {
 
         lOldTail = lTail;
         lFound = false;
 
         for(lIndex = 0; lIndex < inStringLength; lIndex++, lTail = usart_dma_rx_inc_tail(lTail)) {
+
             if(inString[lIndex] != (uint8_t)sUsart2RxBuffer[lTail]) {
                 lFound = false;
                 break;
