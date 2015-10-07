@@ -97,7 +97,6 @@ void led_task(void * inParameters) {
         ws2812_updateLED();
     }
 
-
 #if 1
     {   /* LED test pattern */
         uint8_t lRed = 0;
@@ -187,6 +186,10 @@ void led_task(void * inParameters) {
             ws2812_updateLED();
         }
     }
+#else
+    for(;;) {
+        vTaskDelay(1000);
+    }
 #endif
 }
 
@@ -232,16 +235,72 @@ void esp8266_rx_task(void * inParameters) {
 
 void esp8266_task(void * inParameters) {
 
+    TaskHandle_t xHandle = NULL;
+    BaseType_t lRetVal;
+
+    vTaskDelay(10000);
+
     esp8266_init();
 
     /* create rx task */
-    xTaskCreate(esp8266_rx_task, ( const char * )"esp8266_rx", configMINIMAL_STACK_SIZE * 8, NULL, configMAX_PRIORITIES - 2, NULL);
+    lRetVal = xTaskCreate(esp8266_rx_task, ( const char * )"esp8266_rx", configMINIMAL_STACK_SIZE * 4, NULL, configMAX_PRIORITIES - 2, &xHandle);
 
-    vTaskDelay(5000);
+    if(lRetVal) {
+        printf("Successfully started RX Task\r\n");
+    } else {
+        printf("Failed starting RX Task\r\n");
+    }
+
+    vTaskDelay(1000);
     esp8266_setup();
 
     for(;;) {
-        vTaskDelay(10000);
+
+        printf("Sending down \"AT\"... ");
+        if(esp8266_cmd_at()) {
+            printf("Success!\r\n");
+        } else {
+            printf("Failed!\r\n");
+        }
+
+        printf("Sending down bad command...");
+        if(!esp8266_bad_cmd()) {
+            printf("Success!\r\n");
+        } else {
+            printf("Failed!\r\n");
+        }
+
+        printf("Sending down \"AT+RST\"... ");
+        if(esp8266_cmd_rst()) {
+            printf("Success!\r\n");
+        } else {
+            printf("Failed!\r\n");
+        }
+
+        printf("Sending down \"ATE0\"... ");
+        if(esp8266_cmd_ate0()) {
+            printf("Success!\r\n");
+        } else {
+            printf("Failed!\r\n");
+        }
+
+        {
+            uint8_t lBuffer[128];
+            size_t lActualSize = 0;
+
+            printf("Sending down \"AT+GMR\"... ");
+            if(esp8266_cmd_gmr(lBuffer, sizeof(lBuffer)-1, &lActualSize)) {
+
+                printf("Success!\r\n");
+                lBuffer[lActualSize] = '\0';
+                printf((char*)lBuffer);
+
+            } else {
+                printf("Failed!\r\n");
+            }
+        }
+
+        vTaskDelay(1000);
     }
 }
 
@@ -258,9 +317,9 @@ int main(void) {
     setbuf(stdout, NULL);
 
     {
-        xTaskCreate(led_task,          ( const char * )"led",     configMINIMAL_STACK_SIZE * 8, NULL, configMAX_PRIORITIES - 1, NULL);
-//        xTaskCreate(esp8266_task,      ( const char * )"esp8266", configMINIMAL_STACK_SIZE * 8, NULL, configMAX_PRIORITIES - 2, NULL);
-        xTaskCreate(esp8266_test_task, ( const char * )"test",    configMINIMAL_STACK_SIZE * 8, NULL, configMAX_PRIORITIES - 3, NULL);
+        xTaskCreate(led_task,          ( const char * )"led",     configMINIMAL_STACK_SIZE *  8, NULL, configMAX_PRIORITIES - 1, NULL);
+        xTaskCreate(esp8266_task,      ( const char * )"esp8266", configMINIMAL_STACK_SIZE * 32, NULL, configMAX_PRIORITIES - 2, NULL);
+//        xTaskCreate(esp8266_test_task, ( const char * )"test",    configMINIMAL_STACK_SIZE * 8, NULL, configMAX_PRIORITIES - 3, NULL);
 
         /* Start the scheduler. */
         vTaskStartScheduler();
