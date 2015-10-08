@@ -204,6 +204,8 @@ void esp8266_test_task(void * inParameters) {
 
     usart_dma_open();
 
+    printf("Started...\r\n");
+
     for(;;) {
         lRead = usart_dma_read(lBuffer, sizeof(lBuffer));
         for(lCount = 0; lCount < lRead; lCount++) {
@@ -336,7 +338,6 @@ void esp8266_task(void * inParameters) {
             }
         }
 
-
         {   /* join AP */
             uint8_t lSSID[] = "xyz";
             uint8_t lPW[] = "123456";
@@ -344,11 +345,11 @@ void esp8266_task(void * inParameters) {
             uint8_t lSSID_retrv[32];
             size_t  lSSID_retrv_len;
 
-            uint8_t lAccessPointList[512];
+            static uint8_t lAccessPointList[2048];
             size_t  lAccessPointListLen;
 
             printf("List Access points... ");
-            if(esp8266_cmd_get_cwlap(lAccessPointList, sizeof(lAccessPointList)-1, &lAccessPointListLen)) {
+            if(esp8266_cmd_cwlap(lAccessPointList, sizeof(lAccessPointList)-1, &lAccessPointListLen)) {
                 printf("Success!\r\n");
 
                 lAccessPointList[lAccessPointListLen] = '\0';
