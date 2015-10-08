@@ -798,7 +798,7 @@ bool esp8266_cmd_get_cwjap_cur(uint8_t * outSSID, size_t inSSIDMaxLen, size_t * 
     return false;
 }
 
-bool esp8266_cmd_get_cwlap(uint8_t * outAccessPointList, size_t inAccessPointListMaxLen, size_t * outAccessPointListLen) {
+bool esp8266_cmd_cwlap(uint8_t * outAccessPointList, size_t inAccessPointListMaxLen, size_t * outAccessPointListLen) {
 
     return esp8266_ok_cmd_str(sAT_CWLAP, sizeof(sAT_CWLAP), outAccessPointList, inAccessPointListMaxLen, outAccessPointListLen, 20000);
 }

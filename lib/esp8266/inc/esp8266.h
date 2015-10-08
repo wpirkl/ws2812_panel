@@ -169,10 +169,15 @@ bool esp8266_cmd_get_cwjap_cur(uint8_t * outSSID, size_t inSSIDMaxLen, size_t * 
     \param[in]  inAccessPointListMaxLen Maximum number of bytes which gets filled by this function
     \param[out] outAccessPointListLen   Length of the data in the buffer
 
+    \note data is returned in this format:
+
+    +CWLAP:(<encryption>,"<SSID>",<RSSI>,"<MAC>",<channel>)
+    +CWLAP:(3,"SSID",-88,"12:34:56:78:9a:bc",11)
+
     \retval true    Successful completion
     \retval false   Failed
 */
-bool esp8266_cmd_get_cwlap(uint8_t * outAccessPointList, size_t inAccessPointListMaxLen, size_t * outAccessPointListLen);
+bool esp8266_cmd_cwlap(uint8_t * outAccessPointList, size_t inAccessPointListMaxLen, size_t * outAccessPointListLen);
 
 
 /*! Quit esp8266 wifi access point
