@@ -128,6 +128,16 @@ bool esp8266_cmd_ate0(void);
 bool esp8266_cmd_set_cwmode_cur(te_esp8266_wifi_mode inWifiMode);
 
 
+/*! Get esp8266 wifi mode
+
+    \param[in]  outWifiMode      The mode to get
+
+    \retval true    Successful completion
+    \retval false   Failed
+*/
+bool esp8266_cmd_get_cwmode_cur(te_esp8266_wifi_mode * outWifiMode);
+
+
 /*! Join esp8266 wifi access point
 
     \param[in]  inSSID      The ssid to join (max 31 byte)
@@ -139,6 +149,18 @@ bool esp8266_cmd_set_cwmode_cur(te_esp8266_wifi_mode inWifiMode);
     \retval false   Failed
 */
 bool esp8266_cmd_set_cwjap_cur(uint8_t * inSSID, size_t inSSIDLen, uint8_t * inPWD, size_t inPWDLen);
+
+
+/*! Get esp8266 wifi access point
+
+    \param[out] outSSID         Returns the SSID which we're connected to (max 31 byte)
+    \param[in]  inSSIDMaxLen    Maximum length of outSSID
+    \param[in]  outSSIDLen      Actual length of the SSID returned by this function
+
+    \retval true    Successful completion
+    \retval false   Failed
+*/
+bool esp8266_cmd_get_cwjap_cur(uint8_t * outSSID, size_t inSSIDMaxLen, size_t * outSSIDLen);
 
 
 /*! List esp8266 wifi access points

@@ -40,17 +40,21 @@ const uint8_t sAT_RST[] = { 'A', 'T', '+', 'R', 'S', 'T' };
 const uint8_t sAT_GMR[] = { 'A', 'T', '+', 'G', 'M', 'R' };
 
 /* Wifi commands */
-const uint8_t sAT_CWMODE_CUR[] = { 'A', 'T', '+', 'C', 'W', 'M', 'O', 'D', 'E', '_', 'C', 'U', 'R', '=', '0' };
-const uint8_t sAT_CWJAP_CUR[]  = { 'A', 'T', '+', 'C', 'W', 'J', 'A', 'P', '_', 'C', 'U', 'R', '=' };
-const uint8_t sAT_CWLAP[]      = { 'A', 'T', '+', 'C', 'W', 'L', 'A', 'P' };
-const uint8_t sAT_CWQAP[]      = { 'A', 'T', '+', 'C', 'W', 'Q', 'A', 'P' };
-const uint8_t sAT_CWSAP_CUR[]  = { 'A', 'T', '+', 'C', 'W', 'S', 'A', 'P', '_', 'C', 'U', 'R', '=' };
-const uint8_t sAT_CWLIF[]      = { 'A', 'T', '+', 'C', 'W', 'L', 'I', 'F' };
-const uint8_t sAT_CWDHCP_CUR[] = { 'A', 'T', '+', 'C', 'W', 'D', 'H', 'C', 'P', '_', 'C', 'U', 'R', '=' };
+const uint8_t sAT_CWMODE_CUR[]      = { 'A', 'T', '+', 'C', 'W', 'M', 'O', 'D', 'E', '_', 'C', 'U', 'R' };
+const uint8_t sAT_CWJAP_CUR[]       = { 'A', 'T', '+', 'C', 'W', 'J', 'A', 'P', '_', 'C', 'U', 'R' };
+const uint8_t sAT_CWLAP[]           = { 'A', 'T', '+', 'C', 'W', 'L', 'A', 'P' };
+const uint8_t sAT_CWQAP[]           = { 'A', 'T', '+', 'C', 'W', 'Q', 'A', 'P' };
+const uint8_t sAT_CWSAP_CUR[]       = { 'A', 'T', '+', 'C', 'W', 'S', 'A', 'P', '_', 'C', 'U', 'R', '=' };
+const uint8_t sAT_CWLIF[]           = { 'A', 'T', '+', 'C', 'W', 'L', 'I', 'F' };
+const uint8_t sAT_CWDHCP_CUR[]      = { 'A', 'T', '+', 'C', 'W', 'D', 'H', 'C', 'P', '_', 'C', 'U', 'R', '=' };
 
 const uint8_t sOK[]    = { '\r', '\n', 'O', 'K', '\r', '\n'};
 const uint8_t sERROR[] = { '\r', '\n', 'E', 'R', 'R', 'O', 'R', '\r', '\n' };
+const uint8_t sFAIL[]  = { '\r', '\n', 'F', 'A', 'I', 'L', '\r', '\n' };
 const uint8_t sREADY[] = { 'r', 'e', 'a', 'd', 'y', '\r', '\n' };
+
+const uint8_t sCWMODE_CUR_RET[] = { '+', 'C', 'W', 'M', 'O', 'D', 'E', '_', 'C', 'U', 'R', ':' };
+const uint8_t sCWJAP_CUR_RET[]  = { '+', 'C', 'W', 'J', 'A', 'P', '_', 'C', 'U', 'R', ':' };
 
 /* forward declarations */
 
@@ -291,14 +295,19 @@ static bool esp8266_rx_handle_command_response_gen(const uint8_t * const inSenti
             usart_dma_rx_skip(lSize);
         } else {
 
-            /* assure the caller forsees enough memory */
-            assert_param(lSize - inSentinelLen <= sEsp8266.mResponseLen);
+            size_t lReadSize;
+
+            if(sEsp8266.mResponseLen < lSize - inSentinelLen) {
+                lReadSize = sEsp8266.mResponseLen;
+            } else {
+                lReadSize = lSize - inSentinelLen;
+            }
 
             /* lSize - inSentinelLen <= sEsp8266.mResponseLen */
-            sEsp8266.mResponseRcvLen = usart_dma_read(sEsp8266.mResponseBuffer, lSize - inSentinelLen);
+            sEsp8266.mResponseRcvLen = usart_dma_read(sEsp8266.mResponseBuffer, lReadSize);
 
-            /* Exclude sentinel */
-            usart_dma_rx_skip(inSentinelLen);
+            /* drop the rest including the sentinel */
+            usart_dma_rx_skip(lSize - lReadSize);
 
             /* reset response buffer */
             sEsp8266.mResponseBuffer = NULL;
@@ -381,7 +390,7 @@ void esp8266_rx_handler(void) {
         lTreated = esp8266_rx_handle_ipd() || lTreated;
 
         /* handle WIFI ... messages */
-        lTreated = esp8266_rx_handle_wifi() || lTreated;
+//        lTreated = esp8266_rx_handle_wifi() || lTreated;
 
         /* handle socket connect / close */
         lTreated = esp8266_rx_handle_socket() || lTreated;
@@ -455,6 +464,57 @@ static bool esp8266_ok_cmd(const uint8_t * const inCommand, size_t inCommandLen,
 
         /* set the sentinel to OK / ERROR */
         esp8266_set_sentinel(sOK, sizeof(sOK), sERROR, sizeof(sERROR));
+
+        /* set the response buffer */
+        esp8266_set_response_buffer(NULL, 0);
+
+        /* send command to esp8266 */
+        usart_dma_write(inCommand, inCommandLen);
+
+        /* send cr + lf */
+        usart_dma_write(sCRLF, sizeof(sCRLF));
+
+        /* wait on the answer */
+#if defined(ESP8266_FREERTOS)
+        if(!xSemaphoreTake(sEsp8266.mResponseSema, inTimeoutMs / portTICK_PERIOD_MS)) {
+            esp8266_set_sentinel(NULL, 0, NULL, 0);
+            sEsp8266.mStatus = ESP8266_TIMEOUT;
+            dbg("Timeout\r\n");
+        }
+#endif
+
+        if(sEsp8266.mStatus == ESP8266_OK) {
+            lReturnValue = true;
+        }
+
+#if defined(ESP8266_FREERTOS)
+        xSemaphoreGiveRecursive(sEsp8266.mMutex);
+    }
+#endif
+
+    return lReturnValue;
+}
+
+/*! Execute a command which just response OK or FAIL
+
+    \param[in]  inCommand       The command string to send
+    \param[in]  inCommandLen    The length of the command string
+
+    \retval true        OK was returned
+    \retval false       something else was returned
+*/
+static bool esp8266_ok_cmd_fail(const uint8_t * const inCommand, size_t inCommandLen, uint32_t inTimeoutMs) {
+
+    bool lReturnValue = false;
+
+#if defined(ESP8266_FREERTOS)
+    if(xSemaphoreTakeRecursive(sEsp8266.mMutex, portMAX_DELAY)) {
+#endif
+
+        sEsp8266.mStatus = ESP8266_IN_PROGRESS;
+
+        /* set the sentinel to OK / ERROR */
+        esp8266_set_sentinel(sOK, sizeof(sOK), sFAIL, sizeof(sFAIL));
 
         /* set the response buffer */
         esp8266_set_response_buffer(NULL, 0);
@@ -606,19 +666,20 @@ bool esp8266_cmd_ate0(void) {
 
 bool esp8266_cmd_set_cwmode_cur(te_esp8266_wifi_mode inWifiMode) {
 
-    uint8_t lCommandBuffer[sizeof(sAT_CWMODE_CUR)];
+    uint8_t lCommandBuffer[sizeof(sAT_CWMODE_CUR) + 2];
 
-    memcpy(lCommandBuffer, sAT_CWMODE_CUR, sizeof(sAT_CWMODE_CUR) - 1);
+    memcpy(lCommandBuffer, sAT_CWMODE_CUR, sizeof(sAT_CWMODE_CUR));
+    lCommandBuffer[sizeof(sAT_CWMODE_CUR)] = '=';
 
     switch(inWifiMode) {
         case ESP8266_WIFI_MODE_STATION:
-            lCommandBuffer[sizeof(sAT_CWMODE_CUR)-1] = '1';
+            lCommandBuffer[sizeof(sAT_CWMODE_CUR)+1] = '1';
             break;
         case ESP8266_WIFI_MODE_AP:
-            lCommandBuffer[sizeof(sAT_CWMODE_CUR)-1] = '2';
+            lCommandBuffer[sizeof(sAT_CWMODE_CUR)+1] = '2';
             break;
         case ESP8266_WIFI_MODE_STA_AP:
-            lCommandBuffer[sizeof(sAT_CWMODE_CUR)-1] = '3';
+            lCommandBuffer[sizeof(sAT_CWMODE_CUR)+1] = '3';
             break;
         default:
             return false;
@@ -627,9 +688,59 @@ bool esp8266_cmd_set_cwmode_cur(te_esp8266_wifi_mode inWifiMode) {
     return esp8266_ok_cmd(lCommandBuffer, sizeof(lCommandBuffer), 1000);
 }
 
+bool esp8266_cmd_get_cwmode_cur(te_esp8266_wifi_mode * outWifiMode) {
+
+    uint8_t lCommandBuffer[sizeof(sAT_CWMODE_CUR) + 1];
+    uint8_t lReturnBuffer[sizeof(sCWMODE_CUR_RET) + 1 + 1 + 1];     /* "+CWMODE_CUR:" + <mode> + \r + \n */
+    size_t  lReturnLen;
+
+    if(!outWifiMode) {
+        return false;
+    }
+
+    memcpy(lCommandBuffer, sAT_CWMODE_CUR, sizeof(sAT_CWMODE_CUR));
+
+    lCommandBuffer[sizeof(sAT_CWMODE_CUR)] = '?';
+
+    if(esp8266_ok_cmd_str(lCommandBuffer, sizeof(lCommandBuffer), lReturnBuffer, sizeof(lReturnBuffer), &lReturnLen, 1000)) {
+
+        /* successful completion */
+        if(lReturnLen < sizeof(lReturnBuffer)) {
+
+            /* not enough bytes read */
+            return false;
+        }
+
+        if(memcmp(sCWMODE_CUR_RET, lReturnBuffer, sizeof(sCWMODE_CUR_RET)) == 0) {  /* we found +CWMODE_CUR: */
+
+            switch(lReturnBuffer[sizeof(sCWMODE_CUR_RET)]) {
+                case '1':
+                    *outWifiMode = ESP8266_WIFI_MODE_STATION;
+                    break;
+                case '2':
+                    *outWifiMode = ESP8266_WIFI_MODE_AP;
+                    break;
+                case '3':
+                    *outWifiMode = ESP8266_WIFI_MODE_STA_AP;
+                    break;
+                default:
+                    return false;
+            }
+
+        } else {
+
+            return false;
+        }
+
+        return true;
+    } else {
+        return false;
+    }
+}
+
 bool esp8266_cmd_set_cwjap_cur(uint8_t * inSSID, size_t inSSIDLen, uint8_t * inPWD, size_t inPWDLen) {
 
-    uint8_t lCommandBuffer[sizeof(sAT_CWJAP_CUR) + 1 + 31 + 1 + 1 + 1 + 64 + 1];    /* command length + quote + ssid + quote + comma + quote + password lenght + quote */
+    uint8_t lCommandBuffer[sizeof(sAT_CWJAP_CUR) + 1 + 1 + 31 + 1 + 1 + 1 + 64 + 1];    /* command length + = + quote + ssid + quote + comma + quote + password lenght + quote */
     size_t  lLen = sizeof(sAT_CWJAP_CUR);
 
     if(inSSIDLen > 31 || inPWDLen > 64) {
@@ -637,7 +748,7 @@ bool esp8266_cmd_set_cwjap_cur(uint8_t * inSSID, size_t inSSIDLen, uint8_t * inP
     }
 
     memcpy(lCommandBuffer, sAT_CWJAP_CUR, sizeof(sAT_CWJAP_CUR));
-
+    lCommandBuffer[lLen++] = '=';
     lCommandBuffer[lLen++] = '"';
     memcpy(&lCommandBuffer[lLen], inSSID, inSSIDLen);
     lLen += inSSIDLen;
@@ -645,14 +756,51 @@ bool esp8266_cmd_set_cwjap_cur(uint8_t * inSSID, size_t inSSIDLen, uint8_t * inP
     lCommandBuffer[lLen++] = ',';
     lCommandBuffer[lLen++] = '"';
     memcpy(&lCommandBuffer[lLen], inPWD, inPWDLen);
+    lLen += inPWDLen;
     lCommandBuffer[lLen++] = '"';
 
-    return esp8266_ok_cmd(lCommandBuffer, lLen, 1000);
+    return esp8266_ok_cmd_fail(lCommandBuffer, lLen, 20000);
+}
+
+bool esp8266_cmd_get_cwjap_cur(uint8_t * outSSID, size_t inSSIDMaxLen, size_t * outSSIDLen) {
+
+/* +CWJAP_CUR:"AndroidAP","cc:3a:61:32:9b:eb",6,-49 */
+
+    uint8_t lCommandBuffer[sizeof(sAT_CWJAP_CUR) + 1];
+    uint8_t lReturnBuffer[sizeof(sCWJAP_CUR_RET) + 1 + 31 + 1 + 1 + 1 + 17 + 1 + 1 + 2 + 1 + 3 + 1 + 1 ];     /* "+CWJAP_CUR:" + " + <SSID> + " + , + " + <mac> + " + , + <channel> + , + <dB> + \r + \n */
+    size_t  lReturnLen;
+
+    if(!outSSID || !outSSIDLen) {
+        return false;
+    }
+
+    memcpy(lCommandBuffer, sAT_CWJAP_CUR, sizeof(sAT_CWJAP_CUR));
+
+    lCommandBuffer[sizeof(sAT_CWJAP_CUR)]   = '?';
+
+    if(esp8266_ok_cmd_str(lCommandBuffer, sizeof(lCommandBuffer), lReturnBuffer, sizeof(lReturnBuffer)-1, &lReturnLen, 1000)) {
+
+        if(memcmp(sCWJAP_CUR_RET, lReturnBuffer, sizeof(sCWJAP_CUR_RET)) == 0) {
+            size_t lCount;
+
+            for(lCount = 0; lCount < 31; lCount++) {
+
+                if(lReturnBuffer[lCount + sizeof(sCWJAP_CUR_RET) + 1] == (uint8_t)'"') {
+                    break;
+                }
+                outSSID[lCount] = lReturnBuffer[lCount + sizeof(sCWJAP_CUR_RET) + 1];
+            }
+            *outSSIDLen = lCount;
+            return true;
+        }
+    }
+
+    return false;
 }
 
 bool esp8266_cmd_get_cwlap(uint8_t * outAccessPointList, size_t inAccessPointListMaxLen, size_t * outAccessPointListLen) {
 
-    return esp8266_ok_cmd_str(sAT_CWLAP, sizeof(sAT_CWLAP), outAccessPointList, inAccessPointListMaxLen, outAccessPointListLen, 1000);
+    return esp8266_ok_cmd_str(sAT_CWLAP, sizeof(sAT_CWLAP), outAccessPointList, inAccessPointListMaxLen, outAccessPointListLen, 20000);
 }
 
 bool esp8266_cmd_cwqap(void) {
