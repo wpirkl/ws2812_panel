@@ -244,7 +244,6 @@ void esp8266_task(void * inParameters) {
 
     /* create rx task */
     lRetVal = xTaskCreate(esp8266_rx_task, ( const char * )"esp8266_rx", configMINIMAL_STACK_SIZE * 4, NULL, configMAX_PRIORITIES - 2, &xHandle);
-
     if(lRetVal) {
         printf("Successfully started RX Task\r\n");
     } else {
@@ -300,7 +299,86 @@ void esp8266_task(void * inParameters) {
             }
         }
 
-        vTaskDelay(1000);
+        {
+            te_esp8266_wifi_mode lWifiMode;
+            size_t lCount;
+
+            for(lCount = 0; lCount < 3; lCount++) {
+
+                switch(lCount) {
+                    case 0:
+                        lWifiMode = ESP8266_WIFI_MODE_STATION;
+                        break;
+                    case 1:
+                        lWifiMode = ESP8266_WIFI_MODE_AP;
+                        break;
+                    case 2:
+                        lWifiMode = ESP8266_WIFI_MODE_STA_AP;
+                        break;
+                }
+
+                printf("Set WIFI Mode to %d... ", lWifiMode);
+                if(esp8266_cmd_set_cwmode_cur(lWifiMode)) {
+                    printf("Success!\r\n");
+                } else {
+                    printf("Failed!\r\n");
+                }
+
+                printf("Get WIFI Mode... ");
+                if(esp8266_cmd_get_cwmode_cur(&lWifiMode)) {
+                    printf("Success!\r\n");
+
+                    printf("Wifi Mode is: %d\r\n", lWifiMode);
+
+                } else {
+                    printf("Failed!\r\n");
+                }
+            }
+        }
+
+
+        {   /* join AP */
+            uint8_t lSSID[] = "xyz";
+            uint8_t lPW[] = "123456";
+
+            uint8_t lSSID_retrv[32];
+            size_t  lSSID_retrv_len;
+
+            uint8_t lAccessPointList[512];
+            size_t  lAccessPointListLen;
+
+            printf("List Access points... ");
+            if(esp8266_cmd_get_cwlap(lAccessPointList, sizeof(lAccessPointList)-1, &lAccessPointListLen)) {
+                printf("Success!\r\n");
+
+                lAccessPointList[lAccessPointListLen] = '\0';
+                printf("%s\r\n", lAccessPointList);
+
+            } else {
+                printf("Failed!\r\n");
+            }
+
+            printf("Connecting to AP... ");
+            if(esp8266_cmd_set_cwjap_cur(lSSID, sizeof(lSSID)-1, lPW, sizeof(lPW)-1)) {
+                printf("Success!\r\n");
+            } else {
+                printf("Failed!\r\n");
+            }
+
+            printf("Getting connected AP... ");
+            if(esp8266_cmd_get_cwjap_cur(lSSID_retrv, sizeof(lSSID_retrv) - 1, &lSSID_retrv_len)) {
+                printf("Success!\r\n");
+
+                lSSID_retrv[lSSID_retrv_len] = '\0';
+                printf("SSID is: \"%s\"\r\n", lSSID_retrv);
+
+            } else {
+                printf("Failed!\r\n");
+            }
+
+        }
+
+        vTaskDelay(10000);
     }
 }
 
