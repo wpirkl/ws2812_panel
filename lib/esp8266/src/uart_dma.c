@@ -24,7 +24,7 @@
 
 #include "uart_dma.h"
 
-#define USART2_RX_BUFFER_LEN        (1024)
+#define USART2_RX_BUFFER_LEN        (4096)
 
 #define USART_DMA_FREERTOS
 
