@@ -203,6 +203,23 @@ bool esp8266_cmd_cwqap(void);
 bool esp8266_cmd_set_cwsap_cur(uint8_t * inSSID, size_t inSSIDLen, uint8_t * inPWD, size_t inPWDLen, uint8_t inChannel, te_esp8266_encryption_mode inEncryption);
 
 
+/*! Get esp9266 soft ap mode
+
+    \param[out] outSSID         Returns the ssid (max 31 byte)
+    \param[in]  inSSIDMaxLen    The maximum lenght of outSSID
+    \param[out] outSSIDLen      The actual length returned by outSSID
+    \param[out] outPWD          Returns the password (max 64 byte)
+    \param[in]  inPWDMaxLen     The maximum length of outPWD
+    \param[out] outPWDLen       Returns the actual length of outPWD
+    \param[out] outChannel      Returns the channel
+    \param[out] outEncryption   Returns the encryption
+
+    \retval true    Successful completion
+    \retval false   Failed
+*/
+bool esp8266_cmd_get_cwsap_cur(uint8_t * outSSID, size_t inSSIDMaxLen, size_t * outSSIDLen, uint8_t * outPWD, size_t inPWDMaxLen, size_t * outPWDLen, uint8_t * outChannel, te_esp8266_encryption_mode * outEncryption);
+
+
 /*! List esp8266 wifi access point connected stations
 
     \param[out] outStationList      Buffer which gets filled by this function
