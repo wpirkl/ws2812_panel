@@ -59,6 +59,8 @@ const uint8_t sFAIL[]  = { '\r', '\n', 'F', 'A', 'I', 'L', '\r', '\n' };
 const uint8_t sREADY[] = { 'r', 'e', 'a', 'd', 'y', '\r', '\n' };
 const uint8_t sTCP[]   = { 'T', 'C', 'P' };
 
+const uint8_t sALREADY_CON[] = { 'A', 'L', 'R', 'E', 'A', 'D', 'Y', ' ', 'C', 'O', 'N', 'N', 'E', 'C', 'T', 'E', 'D', '\r', '\n' };
+
 /* forward declarations */
 
 static void esp8266_set_sentinel(const uint8_t * const inSentinel, size_t inSentinelLen, const uint8_t * const inErrorSentinel, size_t inErrorSentinelLen);
@@ -1114,7 +1116,12 @@ bool esp8266_cmd_cipstart_tcp(ts_esp8266_socket ** outSocket, uint8_t * inAddres
 
     ts_esp8266_socket * lSocket;
     uint8_t lCommandBuffer[sizeof(sAT_CIPSTART) + 1 + 1 + 1 + 1 + 3 + 1 + 1 + 1 + 128 + 1 + 1 + 5];  /* command + '=' + <id> + ',' + '"' + 'TCP' + '"' + ',' + '"' + <address> + '"' + ',' + <port> + \0 for debugging */
-    size_t lLen = sizeof(sAT_CIPSTART);
+    size_t lLen;
+
+    uint8_t lReturnBuffer[sizeof(sALREADY_CON)];
+    size_t lReturnLen;
+
+    bool lReturnCode;
 
     uint32_t lCount;
     uint32_t lPort;
@@ -1131,54 +1138,79 @@ bool esp8266_cmd_cipstart_tcp(ts_esp8266_socket ** outSocket, uint8_t * inAddres
         return false;
     }
 
-    /* no more free sockets */
-    if(!esp8266_allocate_socket(&lSocket)) {
-        dbg("Allocate socket failed\r\n");
-        *outSocket = NULL;
-        return false;
-    }
+    for(;;) {
 
-    *outSocket = lSocket;
-
-    memcpy(lCommandBuffer, sAT_CIPSTART, sizeof(sAT_CIPSTART));
-    lCommandBuffer[lLen++] = '=';
-
-    if(sEsp8266.mMultipleConnections) {         /* \todo this has to be mutex protected, until the command sending */
-        /* set connection ID */
-        lCommandBuffer[lLen++] = lSocket->mSocketId + '0';
-        lCommandBuffer[lLen++] = ',';
-    }
-
-    /* add "TCP" */
-    lCommandBuffer[lLen++] = '"';
-    memcpy(&lCommandBuffer[lLen], sTCP, sizeof(sTCP));
-    lLen += sizeof(sTCP);
-    lCommandBuffer[lLen++] = '"';
-    lCommandBuffer[lLen++] = ',';
-
-    /* add "<Address>" */
-    lCommandBuffer[lLen++] = '"';
-    memcpy(&lCommandBuffer[lLen], inAddress, inAddressLength);
-    lLen += inAddressLength;
-    lCommandBuffer[lLen++] = '"';
-    lCommandBuffer[lLen++] = ',';
-
-    /* add port */
-    lPort = inPort;
-    lStarted = false;
-    for(lCount = 10000; lCount > 0; lCount /= 10) {
-        uint32_t lNum = lPort / lCount;
-        if(lNum != 0 || lStarted) {
-            lCommandBuffer[lLen++] = lNum + '0';
-            lStarted = true;
+        /* no more free sockets */
+        if(!esp8266_allocate_socket(&lSocket)) {
+            dbg("Allocate socket failed\r\n");
+            *outSocket = NULL;
+            return false;
         }
 
-        lPort = lPort % lCount;
+        lLen = sizeof(sAT_CIPSTART);
+        memcpy(lCommandBuffer, sAT_CIPSTART, sizeof(sAT_CIPSTART));
+        lCommandBuffer[lLen++] = '=';
+
+        if(sEsp8266.mMultipleConnections) {         /* \todo this has to be mutex protected, until the command sending */
+            /* set connection ID */
+            lCommandBuffer[lLen++] = lSocket->mSocketId + '0';
+            lCommandBuffer[lLen++] = ',';
+        }
+
+        /* add "TCP" */
+        lCommandBuffer[lLen++] = '"';
+        memcpy(&lCommandBuffer[lLen], sTCP, sizeof(sTCP));
+        lLen += sizeof(sTCP);
+        lCommandBuffer[lLen++] = '"';
+        lCommandBuffer[lLen++] = ',';
+
+        /* add "<Address>" */
+        lCommandBuffer[lLen++] = '"';
+        memcpy(&lCommandBuffer[lLen], inAddress, inAddressLength);
+        lLen += inAddressLength;
+        lCommandBuffer[lLen++] = '"';
+        lCommandBuffer[lLen++] = ',';
+
+        /* add port */
+        lPort = inPort;
+        lStarted = false;
+        for(lCount = 10000; lCount > 0; lCount /= 10) {
+            uint32_t lNum = lPort / lCount;
+            if(lNum != 0 || lStarted) {
+                lCommandBuffer[lLen++] = lNum + '0';
+                lStarted = true;
+            }
+
+            lPort = lPort % lCount;
+        }
+
+        /* AT+CIPSTART=4,"TCP","www.google.com",80 */
+        /* ALREADY CONNECTED\r\n\r\nERROR\r\n */
+
+        lReturnCode = esp8266_ok_cmd_str(lCommandBuffer, lLen, lReturnBuffer, sizeof(lReturnBuffer), &lReturnLen, 1000);
+        if(!lReturnCode) {
+
+            if(lReturnLen >= sizeof(lReturnBuffer)) {
+                /* check if ALREADY CONNECTED was returned */
+                if(memcmp(lReturnBuffer, sALREADY_CON, sizeof(sALREADY_CON)) != 0) {
+                    /* something else happened */
+                    return false;
+                }
+
+                /* aparently, the server was faster */
+
+                /* retry allocation */
+                dbg("Retry allocation\r\n");
+
+            } else {
+                /* something else happened */
+                return false;
+            }
+        } else {
+            *outSocket = lSocket;
+            return true;
+        }
     }
-
-    /* AT+CIPSTART=4,"TCP","www.google.com",80 */
-
-    return esp8266_ok_cmd(lCommandBuffer, lLen, 1000);
 }
 
 bool esp8266_cmd_cipclose(ts_esp8266_socket * inSocket) {
