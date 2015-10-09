@@ -378,22 +378,31 @@ void esp8266_task(void * inParameters) {
         }
 
         {   /* Test TCP/IP */
-            ts_esp8266_socket * lSocket;
+            ts_esp8266_socket * lSocket1;
+            ts_esp8266_socket * lSocket2;
             uint8_t lAddress[] = "www.google.com";
 
             printf("Get Socket on www.google.com:80... ");
-            if(esp8266_cmd_cipstart_tcp(&lSocket, lAddress, sizeof(lAddress)-1, 80)) {
+            if(esp8266_cmd_cipstart_tcp(&lSocket1, lAddress, sizeof(lAddress)-1, 80)) {
 
                 printf("Success!\r\n");
-                printf("Socket: %p\r\n", lSocket);
+                printf("Socket: %p\r\n", lSocket1);
+            } else {
+                printf("Failed!\r\n");
+            }
 
+            printf("Trying to open another socket... ");
+            if(esp8266_cmd_cipstart_tcp(&lSocket2, lAddress, sizeof(lAddress)-1, 80)) {
 
-                printf("Closing Socket... ");
-                if(esp8266_cmd_cipclose(lSocket)) {
-                    printf("Success!\r\n");
-                } else {
-                    printf("Failed!\r\n");
-                }
+                printf("Success!\r\n");
+                printf("Socket: %p\r\n", lSocket2);
+            } else {
+                printf("Failed!\r\n");
+            }
+
+            printf("Closing Socket... ");
+            if(esp8266_cmd_cipclose(lSocket1)) {
+                printf("Success!\r\n");
             } else {
                 printf("Failed!\r\n");
             }
