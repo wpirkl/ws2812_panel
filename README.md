@@ -30,8 +30,10 @@
 
 Sent:
 `AT\r\n`
+
 recv echo:
 `AT\r\r\n`
+
 recv:
 `\r\nOK\r\n`
 
@@ -52,6 +54,7 @@ SEND OK\r\n
 
 Sent: 
 `ATE0\r\n`
+
 Recv:
 `ATE0\r\r\n\r\nOK\r\n`
 
@@ -59,25 +62,31 @@ Recv:
 
 Sent:
 `AT\r\n`
+
 Recv:
 `\r\nOK\r\n`
 
 Sent:
 `AT+CIPMUX=1\r\n`
+
 Recv:
 `\r\nOK\r\n`
 
 Sent:
 `AT+CIPSERVER=1,1001\r\n`
+
 Recv:
 `\r\nOK\r\n`
 
 Sent:
 `AT+CIPSEND=0,5\r\n`
+
 Recv:
 `\r\nOK\r\n> `
+
 Sent:
 `12345`
+
 Recv:
 `\r\nRecv 5 bytes\r\n\r\nSEND OK\r\n`
 
