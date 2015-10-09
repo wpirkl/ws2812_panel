@@ -240,12 +240,50 @@ bool esp8266_cmd_get_cwlif(uint8_t * outStationList, size_t inStationListMaxLen,
     \retval true    Successful completion
     \retval false   Failed
 */
-bool esp8266_cmd_set_cwdhcp(te_esp8266_dhcp_mode inDHCPMode, bool inEnable);
+bool esp8266_cmd_set_cwdhcp_cur(te_esp8266_dhcp_mode inDHCPMode, bool inEnable);
 
 
+/*! Set esp8266 multiple connections
+
+    \param[in]  inMultipleConnections       true: enabled, false: one connection mode
+
+    \retval true    Successful completion
+    \retval false   Failed
+*/
+bool esp8266_cmd_set_cipmux(bool inMultipleConnections);
 
 
+/*! Get esp8266 multiple connections
 
+    \param[out] outMultipleConnections       returns true: enabled, false: one connection mode
+
+    \retval true    Successful completion
+    \retval false   Failed
+*/
+bool esp8266_cmd_get_cipmux(bool * outMultipleConnections);
+
+
+/*! Start esp8266 TCP connection
+
+    \param[out] outSocket       Returns the socket which is used
+    \param[in]  inAddress       The Address of the remote host
+    \param[in]  inAddressLength The length of inAddress
+    \param[in]  inPort          The remote port
+
+    \retval true    Successful completion
+    \retval false   Failed
+*/
+bool esp8266_cmd_cipstart_tcp(ts_esp8266_socket ** outSocket, uint8_t * inAddress, size_t inAddressLength, uint16_t inPort);
+
+
+/*! Closes esp8266 connection
+
+    \param[in]  inSocket       The socket to close
+
+    \retval true    Successful completion
+    \retval false   Failed
+*/
+bool esp8266_cmd_cipclose(ts_esp8266_socket * inSocket);
 
 #endif /* ESP8266_H_ */
 
