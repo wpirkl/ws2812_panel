@@ -257,35 +257,34 @@ void esp8266_task(void * inParameters) {
 
     for(;;) {
 
-        printf("Sending down \"AT\"... ");
-        if(esp8266_cmd_at()) {
-            printf("Success!\r\n");
-        } else {
-            printf("Failed!\r\n");
+        {   /* Test AT */
+            printf("Sending down \"AT\"... ");
+            if(esp8266_cmd_at()) {
+                printf("Success!\r\n");
+            } else {
+                printf("Failed!\r\n");
+            }
         }
 
-        printf("Sending down bad command...");
-        if(!esp8266_bad_cmd()) {
-            printf("Success!\r\n");
-        } else {
-            printf("Failed!\r\n");
+        {   /* Reset */
+            printf("Sending down \"AT+RST\"... ");
+            if(esp8266_cmd_rst()) {
+                printf("Success!\r\n");
+            } else {
+                printf("Failed!\r\n");
+            }
         }
 
-        printf("Sending down \"AT+RST\"... ");
-        if(esp8266_cmd_rst()) {
-            printf("Success!\r\n");
-        } else {
-            printf("Failed!\r\n");
+        {   /* Disable echo */
+            printf("Sending down \"ATE0\"... ");
+            if(esp8266_cmd_ate0()) {
+                printf("Success!\r\n");
+            } else {
+                printf("Failed!\r\n");
+            }
         }
 
-        printf("Sending down \"ATE0\"... ");
-        if(esp8266_cmd_ate0()) {
-            printf("Success!\r\n");
-        } else {
-            printf("Failed!\r\n");
-        }
-
-        {
+        {   /* Get Version info */
             uint8_t lBuffer[128];
             size_t lActualSize = 0;
 
@@ -301,7 +300,7 @@ void esp8266_task(void * inParameters) {
             }
         }
 
-        {
+        {   /* Test wifi modes */
             te_esp8266_wifi_mode lWifiMode;
             size_t lCount;
 
@@ -338,9 +337,9 @@ void esp8266_task(void * inParameters) {
             }
         }
 
-        {   /* join AP */
-            uint8_t lSSID[] = "xyz";
-            uint8_t lPW[] = "123456";
+        {   /* Join AP */
+            uint8_t lSSID[] = "AndroidAP";
+            uint8_t lPW[] = "cyvg3835";
 
             uint8_t lSSID_retrv[32];
             size_t  lSSID_retrv_len;
@@ -376,16 +375,100 @@ void esp8266_task(void * inParameters) {
             } else {
                 printf("Failed!\r\n");
             }
+        }
 
+        {   /* Test TCP/IP */
+            ts_esp8266_socket * lSocket;
+            uint8_t lAddress[] = "www.google.com";
+
+            printf("Get Socket on www.google.com:80... ");
+            if(esp8266_cmd_cipstart_tcp(&lSocket, lAddress, sizeof(lAddress)-1, 80)) {
+
+                printf("Success!\r\n");
+                printf("Socket: %p\r\n", lSocket);
+
+
+                printf("Closing Socket... ");
+                if(esp8266_cmd_cipclose(lSocket)) {
+                    printf("Success!\r\n");
+                } else {
+                    printf("Failed!\r\n");
+                }
+            } else {
+                printf("Failed!\r\n");
+            }
+
+        }
+
+        {   /* Test multiple TCP/IP connections */
+            bool lMultipleConnections;
+            ts_esp8266_socket * lSocket1;
+            ts_esp8266_socket * lSocket2;
+            uint8_t lAddress[] = "www.google.com";
+
+            printf("Set multiple connections... ");
+            if(esp8266_cmd_set_cipmux(true)) {
+                printf("Success!\r\n");
+            } else {
+                printf("Failed!\r\n");
+            }
+
+            printf("Get multiple connections... ");
+            if(esp8266_cmd_get_cipmux(&lMultipleConnections)) {
+                printf("Success!\r\n");
+
+                printf("Multiple connections are %s\r\n", (lMultipleConnections)? "enabled" : "disabled");
+            } else {
+                printf("Failed!\r\n");
+            }
+
+            printf("Get Socket1 on www.google.com:80... ");
+            if(esp8266_cmd_cipstart_tcp(&lSocket1, lAddress, sizeof(lAddress)-1, 80)) {
+                printf("Success!\r\n");
+                printf("Socket: %p\r\n", lSocket1);
+            } else {
+                printf("Failed!\r\n");
+            }
+
+            printf("Get Socket2 on www.google.com:80... ");
+            if(esp8266_cmd_cipstart_tcp(&lSocket2, lAddress, sizeof(lAddress)-1, 80)) {
+                printf("Success!\r\n");
+                printf("Socket: %p\r\n", lSocket2);
+            } else {
+                printf("Failed!\r\n");
+            }
+
+
+
+
+
+            printf("Closing Socket1... ");
+            if(esp8266_cmd_cipclose(lSocket1)) {
+                printf("Success!\r\n");
+            } else {
+                printf("Failed!\r\n");
+            }
+
+            printf("Closing Socket2... ");
+            if(esp8266_cmd_cipclose(lSocket2)) {
+                printf("Success!\r\n");
+            } else {
+                printf("Failed!\r\n");
+            }
+
+        }
+
+        {   /* Quit AP */
             printf("Quitting AP... ");
             if(esp8266_cmd_cwqap()) {
                 printf("Success!\r\n");
             } else {
                 printf("Failed!\r\n");
             }
+
         }
 
-        {   /* test AP */
+        {   /* Test AP */
 
             uint8_t lSSIDBuffer[32];
             size_t  lSSIDBufferLen;
@@ -436,6 +519,7 @@ void esp8266_task(void * inParameters) {
                 printf("Failed!\r\n");
             }
         }
+
         vTaskDelay(10000);
     }
 }
