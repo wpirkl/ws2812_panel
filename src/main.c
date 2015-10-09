@@ -377,8 +377,65 @@ void esp8266_task(void * inParameters) {
                 printf("Failed!\r\n");
             }
 
+            printf("Quitting AP... ");
+            if(esp8266_cmd_cwqap()) {
+                printf("Success!\r\n");
+            } else {
+                printf("Failed!\r\n");
+            }
         }
 
+        {   /* test AP */
+
+            uint8_t lSSIDBuffer[32];
+            size_t  lSSIDBufferLen;
+
+            uint8_t lPWDBuffer[64];
+            size_t  lPWDBufferLen;
+
+            uint8_t lChannel;
+            te_esp8266_encryption_mode lEncryption;
+
+            printf("Getting Access Point settings... ");
+            if(esp8266_cmd_get_cwsap_cur(lSSIDBuffer, sizeof(lSSIDBuffer)-1, &lSSIDBufferLen,
+                                         lPWDBuffer,  sizeof(lPWDBuffer)-1,  &lPWDBufferLen,
+                                         &lChannel, &lEncryption)) {
+                printf("Success!\r\n");
+
+                lSSIDBuffer[lSSIDBufferLen] = '\0';
+                lPWDBuffer[lPWDBufferLen] = '\0';
+
+                printf("SSID: \"%s\", Password: \"%s\", Channel %d, Encryption: %d\r\n", lSSIDBuffer, lPWDBuffer, lChannel, lEncryption);
+
+            } else {
+                printf("Failed!\r\n");
+            }
+
+            lSSIDBufferLen = snprintf(lSSIDBuffer, "%s", "WP_AP");
+            lPWDBufferLen  = snprintf(lPWDBuffer,  "%s", "deadbeef");
+
+            printf("Setting Access Point... ");
+            if(esp8266_cmd_set_cwsap_cur(lSSIDBuffer, lSSIDBufferLen, lPWDBuffer, lPWDBufferLen, 11, ESP8266_ENC_MODE_WPA2_PSK)) {
+                printf("Success!\r\n");
+            } else {
+                printf("Failed!\r\n");
+            }
+
+            printf("Getting Access Point settings... ");
+            if(esp8266_cmd_get_cwsap_cur(lSSIDBuffer, sizeof(lSSIDBuffer)-1, &lSSIDBufferLen,
+                                         lPWDBuffer,  sizeof(lPWDBuffer)-1,  &lPWDBufferLen,
+                                         &lChannel, &lEncryption)) {
+                printf("Success!\r\n");
+
+                lSSIDBuffer[lSSIDBufferLen] = '\0';
+                lPWDBuffer[lPWDBufferLen] = '\0';
+
+                printf("SSID: \"%s\", Password: \"%s\", Channel %d, Encryption: %d\r\n", lSSIDBuffer, lPWDBuffer, lChannel, lEncryption);
+
+            } else {
+                printf("Failed!\r\n");
+            }
+        }
         vTaskDelay(10000);
     }
 }
