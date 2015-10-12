@@ -377,14 +377,29 @@ void esp8266_task(void * inParameters) {
             }
         }
 
+        {   /* Test PING */
+            uint8_t lAddress[] = "www.google.com";
+            uint32_t lPingTime;
+
+            printf("Ping www.google.com... \r\n");
+            if(esp8266_cmd_ping(lAddress, sizeof(lAddress), &lPingTime)) {
+                printf("Success!\r\n");
+                printf("Ping response time: %d\r\n", lPingTime);
+            } else {
+                printf("Failed!\r\n");
+            }
+        }
+
         {   /* Test TCP/IP */
             ts_esp8266_socket * lSocket1;
             uint8_t lAddress[] = "www.google.com";
 
             uint8_t lHTTPGet[] = "GET / HTTP/1.1\r\nHost: www.google.com\r\n\r\n\r\n";
 
-            static uint8_t lBuffer[1024];
-            size_t  lBufferLen;
+            static uint8_t lBuffer[1025];
+            size_t lBufferLen;
+
+            size_t lCount;
 
             printf("Get Socket on www.google.com:80... ");
             if(esp8266_cmd_cipstart_tcp(&lSocket1, lAddress, sizeof(lAddress)-1, 80)) {
@@ -418,6 +433,50 @@ void esp8266_task(void * inParameters) {
             } else {
                 printf("Failed!\r\n");
             }
+
+            printf("Test again with small blocks\r\n");
+            printf("Get Socket on www.google.com:80... ");
+            if(esp8266_cmd_cipstart_tcp(&lSocket1, lAddress, sizeof(lAddress)-1, 80)) {
+
+                printf("Success!\r\n");
+                printf("Socket: %p\r\n", lSocket1);
+            } else {
+                printf("Failed!\r\n");
+            }
+
+            printf("Send GET... ");
+            if(esp8266_cmd_cipsend_tcp(lSocket1, lHTTPGet, sizeof(lHTTPGet)-1)) {
+                printf("Success!\r\n");
+            } else {
+                printf("Failed!\r\n");
+            }
+
+            for(lCount = 0;;lCount++) {
+
+                uint8_t lSmallBuffer[129];
+                size_t lSmallBufferLen = 0;
+
+                printf("Junk %d\r\n", lCount);
+                if(esp8266_receive(lSocket1, lSmallBuffer, sizeof(lSmallBuffer)-1, &lSmallBufferLen)) {
+                    printf("Received %d bytes\r\n", lSmallBufferLen);
+                    lSmallBuffer[lSmallBufferLen] = '\0';
+                    printf("Buffer:\r\n%s\r\nEnd of buffer\r\n", lSmallBuffer);
+                    if(lSmallBufferLen < sizeof(lSmallBuffer)-1) {
+                        break;
+                    }
+                } else {
+                    printf("Failed!\r\n");
+                }
+            }
+
+            printf("Closing Socket... ");
+            if(esp8266_cmd_cipclose(lSocket1)) {
+                printf("Success!\r\n");
+            } else {
+                printf("Failed!\r\n");
+            }
+
+
         }
 
         {   /* Test multiple TCP/IP connections */

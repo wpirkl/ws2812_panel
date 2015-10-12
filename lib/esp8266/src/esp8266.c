@@ -21,6 +21,7 @@
 #define ESP8266_MAX_RESPONSE_SIZE       (128)
 #define ESP8266_MAX_CHANNEL_RCV_SIZE    (2048)
 #define ESP8266_MAX_CHANNEL_RCV_CNT     (4)
+#define ESP8266_MAX_SEND_LEN            (2048)
 
 #define ESP8266_FREERTOS
 
@@ -54,6 +55,8 @@ const uint8_t sAT_CIPMUX[]   = { 'A', 'T', '+', 'C', 'I', 'P', 'M', 'U', 'X' };
 const uint8_t sAT_CIPSTART[] = { 'A', 'T', '+', 'C', 'I', 'P', 'S', 'T', 'A', 'R', 'T' };
 const uint8_t sAT_CIPCLOSE[] = { 'A', 'T', '+', 'C', 'I', 'P', 'C', 'L', 'O', 'S', 'E' };
 const uint8_t sAT_CIPSEND[]  = { 'A', 'T', '+', 'C', 'I', 'P', 'S', 'E', 'N', 'D' };
+
+const uint8_t sAT_PING[] = { 'A', 'T', '+', 'P', 'I', 'N', 'G' };
 
 const uint8_t sOK[]      = { '\r', '\n', 'O', 'K', '\r', '\n'};
 const uint8_t sERROR[]   = { '\r', '\n', 'E', 'R', 'R', 'O', 'R', '\r', '\n' };
@@ -1094,6 +1097,51 @@ bool esp8266_cmd_get_cipmux(bool * outMultipleConnections) {
     return false;
 }
 
+bool esp8266_cmd_ping(uint8_t * inAddress, size_t inAddressLength, uint32_t * outResponseTime) {
+
+    uint8_t lCommandBuffer[sizeof(sAT_CIPSTART) + 1 + 1 + 128 + 1];  /* command + '=' + '"' + <address> + '"' */
+    size_t lLen;
+    uint8_t lReturnBuffer[1 + 6 + 1 + 1];   /* +<time> */
+    size_t  lReturnLen;
+
+    if(!outResponseTime) {
+        return false;
+    }
+
+    if(inAddressLength > 128) {
+        dbg("Address is too long\r\n");
+        return false;
+    }
+
+    memcpy(lCommandBuffer, sAT_PING, sizeof(sAT_PING));
+    lLen = sizeof(sAT_PING);
+    lCommandBuffer[lLen++] = '=';
+    lCommandBuffer[lLen++] = '"';
+
+    memcpy(&lCommandBuffer[lLen], inAddress, inAddressLength);
+    lLen += inAddressLength;
+
+    lCommandBuffer[lLen++] = '"';
+
+    if(esp8266_ok_cmd_str(lCommandBuffer, lLen, lReturnBuffer, sizeof(lReturnBuffer)-1, &lReturnLen, 10000)) {
+
+        size_t lCount;
+        uint32_t lResponseTime = 0;
+
+        /* decode time */
+        for(lCount = 1; isdigit((char)lReturnBuffer[lCount]) ; lCount++) {
+
+            lResponseTime = lResponseTime * 10 + lReturnBuffer[lCount] - '0';
+        }
+        
+        *outResponseTime = lResponseTime;
+        return true;
+    }
+
+
+    return false;
+}
+
 /*! Allocate a socket
 
     \param[out] outSocket       Returns the allocated socket
@@ -1340,6 +1388,10 @@ bool esp8266_receive(ts_esp8266_socket * inSocket, uint8_t * outBuffer, size_t i
         return false;
     }
 
+    if(!outBuffer || !outBufferLen) {
+        return false;
+    }
+
     xTicksToWait = inSocket->mTimeout / portTICK_PERIOD_MS;
     vTaskSetTimeOutState( &xTimeOut );
 
@@ -1408,6 +1460,10 @@ bool esp8266_cmd_cipsend_tcp(ts_esp8266_socket * inSocket, uint8_t * inBuffer, s
 
     if(!isSocket(inSocket)) {
         dbg("Socket check failed\r\n");
+        return false;
+    }
+
+    if(!inBuffer || inBufferLen > ESP8266_MAX_SEND_LEN) {
         return false;
     }
 

@@ -263,6 +263,18 @@ bool esp8266_cmd_set_cipmux(bool inMultipleConnections);
 bool esp8266_cmd_get_cipmux(bool * outMultipleConnections);
 
 
+/*! Ping esp8266 destination
+
+    \param[in]  inAddress       The Address of the remote host
+    \param[in]  inAddressLength The length of inAddress
+    \param[out] outResponseTime Returns the time it took to ping
+
+    \retval true    Successful completion
+    \retval false   Failed
+*/
+bool esp8266_cmd_ping(uint8_t * inAddress, size_t inAddressLength, uint32_t * outResponseTime);
+
+
 /*! Start esp8266 TCP connection
 
     \param[out] outSocket       Returns the socket which is used
