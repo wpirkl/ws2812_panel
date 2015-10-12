@@ -426,6 +426,11 @@ void esp8266_task(void * inParameters) {
             ts_esp8266_socket * lSocket2;
             uint8_t lAddress[] = "www.google.com";
 
+            uint8_t lHTTPGet[] = "GET / HTTP/1.1\r\nHost: www.google.com\r\n\r\n\r\n";
+
+            static uint8_t lBuffer[1024];
+            size_t  lBufferLen;
+
             printf("Set multiple connections... ");
             if(esp8266_cmd_set_cipmux(true)) {
                 printf("Success!\r\n");
@@ -459,8 +464,39 @@ void esp8266_task(void * inParameters) {
             }
 
 
+            printf("Send GET on socket 1... ");
+            if(esp8266_cmd_cipsend_tcp(lSocket1, lHTTPGet, sizeof(lHTTPGet)-1)) {
+                printf("Success!\r\n");
+            } else {
+                printf("Failed!\r\n");
+            }
 
+            printf("Send GET on socket 2... ");
+            if(esp8266_cmd_cipsend_tcp(lSocket2, lHTTPGet, sizeof(lHTTPGet)-1)) {
+                printf("Success!\r\n");
+            } else {
+                printf("Failed!\r\n");
+            }
 
+            printf("Receiving Data on socket 1... ");
+            if(esp8266_receive(lSocket1, lBuffer, sizeof(lBuffer)-1, &lBufferLen)) {
+                printf("Success!\r\n");
+                printf("Received %d bytes\r\n", lBufferLen);
+                lBuffer[lBufferLen] = '\0';
+                printf("Buffer:\r\n%s\r\nEnd of buffer\r\n", lBuffer);
+            } else {
+                printf("Failed!\r\n");
+            }
+
+            printf("Receiving Data on socket 2... ");
+            if(esp8266_receive(lSocket2, lBuffer, sizeof(lBuffer)-1, &lBufferLen)) {
+                printf("Success!\r\n");
+                printf("Received %d bytes\r\n", lBufferLen);
+                lBuffer[lBufferLen] = '\0';
+                printf("Buffer:\r\n%s\r\nEnd of buffer\r\n", lBuffer);
+            } else {
+                printf("Failed!\r\n");
+            }
 
             printf("Closing Socket1... ");
             if(esp8266_cmd_cipclose(lSocket1)) {
@@ -549,6 +585,7 @@ void esp8266_task(void * inParameters) {
                 printf("Failed!\r\n");
             }
         }
+
         vTaskDelay(10000);
     }
 }
