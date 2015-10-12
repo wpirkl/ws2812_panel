@@ -285,6 +285,49 @@ bool esp8266_cmd_cipstart_tcp(ts_esp8266_socket ** outSocket, uint8_t * inAddres
 */
 bool esp8266_cmd_cipclose(ts_esp8266_socket * inSocket);
 
+
+/*! Set esp8266 socket timeout
+
+    \param[in]  inSocket        The socket to set
+    \param[in]  inTimeoutMS     The timeout in ms
+
+    \note the default timeout of a socket is 1s
+
+    \retval true    Successful completion
+    \retval false   Failed
+*/
+bool esp8266_set_socket_timeout(ts_esp8266_socket * inSocket, uint32_t inTimeoutMS);
+
+
+/*! Receive data from the socket
+
+    \param[in]  inSocket        The socket to receive from
+    \param[out] outBuffer       Buffer which gets filled by this function
+    \param[in]  inBufferMaxLen  The maximum length this buffer can store
+    \param[out] outBufferLen    The acutal length of the data which was retreived
+
+    \retval true    Successful completion
+    \retval false   Failed
+*/
+bool esp8266_receive(ts_esp8266_socket * inSocket, uint8_t * outBuffer, size_t inBufferMaxLen, size_t * outBufferLen);
+
+
+/*! Send esp8266 data via TCP
+
+    \param[in]  inSocket        The socket to send to
+    \param[in]  inBuffer        The buffer to send
+    \param[in]  inBufferLen     The length of the buffer
+
+    \retval true    Successful completion
+    \retval false   Failed
+*/
+bool esp8266_cmd_cipsend_tcp(ts_esp8266_socket * inSocket, uint8_t * inBuffer, size_t inBufferLen);
+
+
+
+
+
+
 #endif /* ESP8266_H_ */
 
 /* eof */
