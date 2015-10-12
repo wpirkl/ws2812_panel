@@ -1094,9 +1094,6 @@ bool esp8266_cmd_get_cipmux(bool * outMultipleConnections) {
     return false;
 }
 
-#undef dbg
-#define dbg dbg_off
-
 /*! Allocate a socket
 
     \param[out] outSocket       Returns the allocated socket
@@ -1423,7 +1420,7 @@ bool esp8266_cmd_cipsend_tcp(ts_esp8266_socket * inSocket, uint8_t * inBuffer, s
             lCommandBuffer[lLen++] = '=';
             if(sEsp8266.mMultipleConnections) {
                 /* add socket id */
-                lCommandBuffer[lLen++] = inSocket->mSocketId;
+                lCommandBuffer[lLen++] = inSocket->mSocketId + '0';
                 lCommandBuffer[lLen++] = ',';
             }
 
