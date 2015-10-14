@@ -4,6 +4,7 @@
 #include <stdint.h>
 #include <stdbool.h>
 
+
 /*! Defines return of a command */
 typedef enum {
     /*! Successful completion */
@@ -16,6 +17,7 @@ typedef enum {
     ESP8266_IN_PROGRESS,
 } te_esp8266_cmd_ret;
 
+
 /*! Defines the wifi mode */
 typedef enum {
     /*! Station mode */
@@ -25,6 +27,7 @@ typedef enum {
     /*! Station and access point mode */
     ESP8266_WIFI_MODE_STA_AP    = 3,
 } te_esp8266_wifi_mode;
+
 
 /*! Defines the encryption mode */
 typedef enum {
@@ -37,6 +40,7 @@ typedef enum {
     /*! WPA2 PSK */
     ESP8266_ENC_MODE_WPA_WPA2_PSK   = 4,
 } te_esp8266_encryption_mode;
+
 
 /*! Defines the dhcp mode */
 typedef enum {
@@ -51,6 +55,11 @@ typedef enum {
 
 /*! socket structure */
 typedef struct s_esp8266_socket ts_esp8266_socket;
+
+
+/*! Server handler function */
+typedef void (*t_esp8266_server_handler)(ts_esp8266_socket * inSocket);
+
 
 /*! Initialize the ESP8266 driver
 
@@ -336,7 +345,15 @@ bool esp8266_receive(ts_esp8266_socket * inSocket, uint8_t * outBuffer, size_t i
 bool esp8266_cmd_cipsend_tcp(ts_esp8266_socket * inSocket, uint8_t * inBuffer, size_t inBufferLen);
 
 
+/*! Create TCP server
 
+    \param[in]  inPort          The port to listen on
+    \param[in]  inServerHandler Handles incoming connections. This function will be spawned like a task
+
+    \retval true    Successful completion
+    \retval false   Failed
+*/
+bool esp8266_cmd_cipserver(uint16_t inPort, t_esp8266_server_handler inServerHandler, uint32_t inServerTaskPriority);
 
 
 

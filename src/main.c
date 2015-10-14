@@ -228,6 +228,28 @@ void esp8266_test_task(void * inParameters) {
     }
 }
 
+void esp8266_server_handler_task(ts_esp8266_socket * inSocket) {
+
+    uint8_t lBuffer[128];
+    size_t lRcvLen;
+
+    printf("%s(%d): alive on socket %p\r\n", __func__, __LINE__, inSocket);
+
+    for(;;) {
+        if(esp8266_receive(inSocket, lBuffer, sizeof(lBuffer), &lRcvLen)) {
+            printf("Received %d bytes\r\n", lRcvLen);
+
+            if(!esp8266_cmd_cipsend_tcp(inSocket, lBuffer, lRcvLen)) {
+                printf("Send failed!\r\n");
+                break;
+            }
+        } else {
+            printf("Receive failed!\r\n");
+            break;
+        }
+    }
+}
+
 void esp8266_rx_task(void * inParameters) {
 
     for(;;) {
@@ -381,10 +403,20 @@ void esp8266_task(void * inParameters) {
             uint8_t lAddress[] = "www.google.com";
             uint32_t lPingTime;
 
-            printf("Ping www.google.com... \r\n");
+            printf("Ping www.google.com... ");
             if(esp8266_cmd_ping(lAddress, sizeof(lAddress), &lPingTime)) {
                 printf("Success!\r\n");
                 printf("Ping response time: %d\r\n", lPingTime);
+            } else {
+                printf("Failed!\r\n");
+            }
+        }
+
+        {   /* Reset cipmux */
+
+            printf("Set multiple connections to false... ");
+            if(esp8266_cmd_set_cipmux(false)) {
+                printf("Success!\r\n");
             } else {
                 printf("Failed!\r\n");
             }
@@ -466,6 +498,7 @@ void esp8266_task(void * inParameters) {
                     }
                 } else {
                     printf("Failed!\r\n");
+                    break;
                 }
             }
 
@@ -635,17 +668,19 @@ void esp8266_task(void * inParameters) {
             }
         }
 
-        {   /* Reset cipmux */
-
-            printf("Set multiple connections to false... ");
-            if(esp8266_cmd_set_cipmux(false)) {
+        {   /* Test TCP Server */
+            printf("Starting Echo server on port 23... ");
+            if(esp8266_cmd_cipserver(23, esp8266_server_handler_task, configMAX_PRIORITIES - 3)) {
                 printf("Success!\r\n");
             } else {
                 printf("Failed!\r\n");
             }
         }
 
-        vTaskDelay(10000);
+        /* sleep forever */
+        for(;;) {
+            vTaskDelay(10000);
+        }
     }
 }
 
