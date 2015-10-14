@@ -7,7 +7,7 @@ SRCS += port.c
 SRCS += queue.c
 SRCS += tasks.c
 SRCS += timers.c
-SRCS += heap_1.c
+SRCS += heap_4.c
 
 # Config
 include $(ROOTDIR)/config.mk
