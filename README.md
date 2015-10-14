@@ -100,4 +100,7 @@ WIFI GOT IP\r\n
 0,CLOSED\r\n
 ```
 
+# Eclipse Paho MQTT C/C++ client for Embedded platforms
+
+This repository uses [Eclipse Paho](http://eclipse.org/paho) MQTT C/C++ client library for Embedded platorms.
 
