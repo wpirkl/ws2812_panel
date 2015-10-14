@@ -30,20 +30,22 @@ include config.mk
 LIBPATH = lib
 
 # libs to link
-LIBS  = ws2812
 LIBS += usbdevcore
 LIBS += usbdevcdc
 LIBS += usbcore
+LIBS += ws2812
 LIBS += esp8266
+LIBS += paho
 LIBS += stdperiph
 LIBS += freertos
 
-LIBPATH_ws2812     = $(LIBPATH)/ws2812
-LIBPATH_stdperiph  = $(LIBPATH)/StdPeriph
 LIBPATH_usbdevcore = $(LIBPATH)/USB_Device/Core
 LIBPATH_usbdevcdc  = $(LIBPATH)/USB_Device/Class/cdc
 LIBPATH_usbcore    = $(LIBPATH)/USB_OTG
+LIBPATH_ws2812     = $(LIBPATH)/ws2812
 LIBPATH_esp8266    = $(LIBPATH)/esp8266
+LIBPATH_paho       = $(LIBPATH)/paho
+LIBPATH_stdperiph  = $(LIBPATH)/StdPeriph
 LIBPATH_freertos   = $(LIBPATH)/FreeRTOS
 
 # concatenate all library paths
