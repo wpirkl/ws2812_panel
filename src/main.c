@@ -24,6 +24,9 @@
 #include "FreeRTOS.h"
 #include "task.h"
 
+/* place heap into ccm */
+// uint8_t __attribute__ ((section(".ccmdata"), aligned(8))) ucHeap[ configTOTAL_HEAP_SIZE ];
+
 // Private variables
 volatile uint32_t time_var1, time_var2;
 __ALIGN_BEGIN USB_OTG_CORE_HANDLE  USB_OTG_dev __ALIGN_END;
@@ -275,7 +278,6 @@ void esp8266_task(void * inParameters) {
     }
 
     vTaskDelay(1000);
-    esp8266_setup();
 
     for(;;) {
 
@@ -606,16 +608,6 @@ void esp8266_task(void * inParameters) {
 
         }
 
-        {   /* Quit AP */
-            printf("Quitting AP... ");
-            if(esp8266_cmd_cwqap()) {
-                printf("Success!\r\n");
-            } else {
-                printf("Failed!\r\n");
-            }
-
-        }
-
         {   /* Test AP */
 
             uint8_t lSSIDBuffer[32];
@@ -675,6 +667,50 @@ void esp8266_task(void * inParameters) {
             } else {
                 printf("Failed!\r\n");
             }
+        }
+
+        {   /* test GOOGLE in a loop */
+            size_t lCount;
+
+            for(lCount = 0; lCount < 1000; lCount++) {
+
+                ts_esp8266_socket * lSocket1;
+
+                printf("Loop %d\r\n", lCount);
+                uint8_t lAddress[] = "www.google.com";
+
+                uint8_t lHTTPGet[] = "GET / HTTP/1.1\r\nHost: www.google.com\r\n\r\n\r\n";
+
+                static uint8_t lBuffer[1024];
+                size_t lBufferLen;
+
+                if(!esp8266_cmd_cipstart_tcp(&lSocket1, lAddress, sizeof(lAddress)-1, 80)) {
+                    printf("Connect Failed!\r\n");
+                    continue;
+                }
+
+                if(!esp8266_cmd_cipsend_tcp(lSocket1, lHTTPGet, sizeof(lHTTPGet)-1)) {
+                    printf("Send Failed!\r\n");
+                    esp8266_cmd_cipclose(lSocket1);
+                    continue;
+                }
+
+                if(!esp8266_receive(lSocket1, lBuffer, sizeof(lBuffer), &lBufferLen)) {
+                    printf("Receive Failed!\r\n");
+                }
+
+                esp8266_cmd_cipclose(lSocket1);
+            }
+        }
+
+        {   /* Quit AP */
+            printf("Quitting AP... ");
+            if(esp8266_cmd_cwqap()) {
+                printf("Success!\r\n");
+            } else {
+                printf("Failed!\r\n");
+            }
+
         }
 
         /* sleep forever */

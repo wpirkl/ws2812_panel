@@ -76,11 +76,6 @@ void esp8266_init(void);
 void esp8266_rx_handler(void);
 
 
-/*! Setup esp8266
-*/
-void esp8266_setup(void);
-
-
 /*! Test if this library works by sending down a mal-formatted command
 
     \note this command should fail

@@ -19,7 +19,7 @@
 
 #define ESP8266_MAX_CONNECTIONS         (5)
 #define ESP8266_MAX_RESPONSE_SIZE       (128)
-#define ESP8266_MAX_CHANNEL_RCV_SIZE    (2048)
+#define ESP8266_MAX_CHANNEL_RCV_SIZE    (1460)
 #define ESP8266_MAX_CHANNEL_RCV_CNT     (4)
 #define ESP8266_MAX_SEND_LEN            (2048)
 
@@ -248,6 +248,8 @@ static void esp8266_server_handler_task(void * inParameters) {
         dbg("Failed\r\n");
     }
 
+    dbg("Task Delete\r\n");
+
     /* delete this task */
     vTaskDelete(NULL);
 }
@@ -363,6 +365,7 @@ static bool esp8266_rx_handle_socket(void) {
 
     size_t lLen;
 
+    /* 0,CONNECT\r\n */
     lLen = usart_dma_match(sCONNECT, sizeof(sCONNECT));
     if(lLen > 0) {
 
@@ -392,6 +395,7 @@ static bool esp8266_rx_handle_socket(void) {
         return true;
     }
 
+    /* 0,CLOSED\r\n */
     lLen = usart_dma_match(sCLOSED, sizeof(sCLOSED));
     if(lLen > 0) {
 
@@ -418,8 +422,7 @@ static bool esp8266_rx_handle_socket(void) {
     return false;
 }
 
-/*!
-    Handles generic command responses
+/*! Handles generic command responses
 
     \param[in]  inSentinel      The sentinel to match
     \param[in]  inSentinelLen   The length of the sentinel
@@ -469,8 +472,7 @@ static bool esp8266_rx_handle_command_response_gen(const uint8_t * const inSenti
     return false;
 }
 
-/*!
-    This function handles incoming command responses
+/*! This function handles incoming command responses
 */
 static bool esp8266_rx_handle_command_response(void) {
 
@@ -525,24 +527,19 @@ void esp8266_rx_handler(void) {
         /* handle socket receive */
         lTreated = esp8266_rx_handle_ipd() || lTreated;
 
+        /* handle command response */
+        lTreated = esp8266_rx_handle_command_response() || lTreated;
+
         /* handle WIFI ... messages */
 //        lTreated = esp8266_rx_handle_wifi() || lTreated;
 
         /* handle socket connect / close */
         lTreated = esp8266_rx_handle_socket() || lTreated;
 
-        /* handle command response */
-        lTreated = esp8266_rx_handle_command_response() || lTreated;
-
     } while(lTreated);  /* treat as long as we can */
 
     /* update treated */
     sEsp8266.mTreated = usart_dma_rx_num();
-}
-
-void esp8266_setup(void) {
-
-    
 }
 
 /*! Retreive the length of the response
@@ -1005,6 +1002,8 @@ bool esp8266_cmd_set_cwsap_cur(uint8_t * inSSID, size_t inSSIDLen, uint8_t * inP
     lCommandBuffer[lLen++] = ',';
     lCommandBuffer[lLen++] = lMode;
 
+    /* AT+CWSAP="WP_AP","deadbeef",11,3 */
+
     return esp8266_ok_cmd(lCommandBuffer, lLen, 1000);
 }
 
@@ -1388,6 +1387,7 @@ bool esp8266_cmd_cipstart_tcp(ts_esp8266_socket ** outSocket, uint8_t * inAddres
         /* no ip\r\n */
         /* Link typ ERROR\r\n */
         /* DNS Fail\r\n */
+        /* 4,CONNECT\r\n\r\nOK\r\n */
 
         lReturnCode = esp8266_ok_cmd_str(lCommandBuffer, lLen, lReturnBuffer, sizeof(lReturnBuffer)-1, &lReturnLen, 10000);
         if(!lReturnCode) {
@@ -1723,6 +1723,8 @@ bool esp8266_cmd_cipserver(uint16_t inPort, t_esp8266_server_handler inServerHan
 
         lPort = lPort % lCount;
     }
+
+    /* AT+CIPSERVER=1,23 */
 
     lReturnValue = esp8266_ok_cmd(lCommandBuffer, lLen, 1000);
     if(lReturnValue) {
