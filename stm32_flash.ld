@@ -121,6 +121,8 @@ SECTIONS
     *(.ccmtext*)       /* .mb1text* sections (code)  */
     *(.ccmrodata)      /* read-only data (constants) */
     *(.ccmrodata*)
+    *(.ccmdata)        /* rw data */
+    *(.ccmdata*)
   } >CCM
 
   /* Remove information from the standard libraries */
