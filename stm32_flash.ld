@@ -113,16 +113,29 @@ SECTIONS
     . = ALIGN(4);
   } >RAM
 
-  /* MEMORY_bank1 section, code must be located here explicitly            */
-  /* Example: extern int foo(void) __attribute__ ((section (".mb1text"))); */
-  .ccm_text :
+  _siccmdata = (_sidata + SIZEOF(.data));
+  /* core coupled data memory section, code must be located here explicitly */
+  /* Example: extern int foo(void) __attribute__ ((section (".ccmdata"))); */
+
+  .ccm_data : AT( _siccmdata )
   {
-    *(.ccmtext)        /* .mb1text sections (code) */
-    *(.ccmtext*)       /* .mb1text* sections (code)  */
-    *(.ccmrodata)      /* read-only data (constants) */
-    *(.ccmrodata*)
-    *(.ccmdata)        /* rw data */
-    *(.ccmdata*)
+    . = ALIGN(4);
+    _sccmdata = .;        /* create a global symbol at data start */
+    *(.ccmdata)           /* .data sections */
+    *(.ccmdata*)          /* .data* sections */
+
+    . = ALIGN(4);
+    _eccmdata = .;        /* define a global symbol at data end */
+  } >CCM
+
+  /* core coupled bss memory section, code must be located here explicitly */
+  /* Example: extern int foo(void) __attribute__ ((section (".ccmbss"))); */
+  .ccm_bss (NOLOAD) :
+  {
+    _sccmbss = .;
+    *(.ccmbss)        /* rw data */
+    *(.ccmbss*)
+    _eccmbss = .;
   } >CCM
 
   /* Remove information from the standard libraries */

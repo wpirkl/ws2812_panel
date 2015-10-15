@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdint.h>
+#include <inttypes.h>
 #include <ctype.h>
 #include <math.h>
 
@@ -25,7 +26,7 @@
 #include "task.h"
 
 /* place heap into ccm */
-// uint8_t __attribute__ ((section(".ccmdata"), aligned(8))) ucHeap[ configTOTAL_HEAP_SIZE ];
+uint8_t __attribute__ ((section(".ccmbss"), aligned(8))) ucHeap[ configTOTAL_HEAP_SIZE ];
 
 // Private variables
 volatile uint32_t time_var1, time_var2;
@@ -408,7 +409,7 @@ void esp8266_task(void * inParameters) {
             printf("Ping www.google.com... ");
             if(esp8266_cmd_ping(lAddress, sizeof(lAddress), &lPingTime)) {
                 printf("Success!\r\n");
-                printf("Ping response time: %d\r\n", lPingTime);
+                printf("Ping response time: %" PRIu32 "\r\n", lPingTime);
             } else {
                 printf("Failed!\r\n");
             }
@@ -634,8 +635,8 @@ void esp8266_task(void * inParameters) {
                 printf("Failed!\r\n");
             }
 
-            lSSIDBufferLen = snprintf(lSSIDBuffer, "%s", "WP_AP");
-            lPWDBufferLen  = snprintf(lPWDBuffer,  "%s", "deadbeef");
+            lSSIDBufferLen = snprintf((char*)lSSIDBuffer, sizeof(lSSIDBuffer), "%s", "WP_AP");
+            lPWDBufferLen  = snprintf((char*)lPWDBuffer,  sizeof(lPWDBuffer),  "%s", "deadbeef");
 
             printf("Setting Access Point... ");
             if(esp8266_cmd_set_cwsap_cur(lSSIDBuffer, lSSIDBufferLen, lPWDBuffer, lPWDBufferLen, 11, ESP8266_ENC_MODE_WPA2_PSK)) {
