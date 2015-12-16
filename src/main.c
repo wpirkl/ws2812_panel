@@ -25,6 +25,8 @@
 #include "FreeRTOS.h"
 #include "task.h"
 
+#include "MQTTClient.h"
+
 /* place heap into ccm */
 uint8_t __attribute__ ((section(".ccmbss"), aligned(8))) ucHeap[ configTOTAL_HEAP_SIZE ];
 
@@ -661,6 +663,27 @@ void esp8266_task(void * inParameters) {
             }
         }
 
+        {   /* list ap stations */
+            uint8_t lStationList[1024];
+            size_t lStationListLen;
+            size_t lCount;
+
+            for(lCount = 0; lCount < 10; lCount++) {
+                printf("[%d] Getting connected stations... ", lCount);
+                if(esp8266_cmd_get_cwlif(lStationList, sizeof(lStationList)-1, &lStationListLen)) {
+                    printf("Success!\r\n");
+
+                    lStationList[lStationListLen] = '\0';
+                    printf("%s\r\n", lStationList);
+                } else {
+                    printf("Failed!\r\n");
+                }
+
+                /* sleep 2 sec */
+                vTaskDelay(2000);
+            }
+        }
+
         {   /* Test TCP Server */
             printf("Starting Echo server on port 23... ");
             if(esp8266_cmd_cipserver(23, esp8266_server_handler_task, configMAX_PRIORITIES - 3)) {
@@ -721,6 +744,127 @@ void esp8266_task(void * inParameters) {
     }
 }
 
+void esp8266_mqtt_message_arrived(MessageData* data) {
+
+    printf("Message arrived on topic %.*s: %.*s\r\n",
+        data->topicName->lenstring.len,
+        data->topicName->lenstring.data,
+        data->message->payloadlen,
+        (char*)data->message->payload);
+}
+
+void esp8266_mqtt_task(void * inParameters) {
+
+    TaskHandle_t xHandle = NULL;
+    BaseType_t lRetVal;
+
+    vTaskDelay(10000);
+
+    printf("Initialize ESP8266... ");
+    esp8266_init();
+    printf("done\r\n");
+
+    /* create rx task */
+    lRetVal = xTaskCreate(esp8266_rx_task, ( const char * )"esp8266_rx", configMINIMAL_STACK_SIZE * 4, NULL, configMAX_PRIORITIES - 2, &xHandle);
+    if(lRetVal) {
+        printf("Successfully started RX Task\r\n");
+    } else {
+        printf("Failed starting RX Task\r\n");
+    }
+
+    vTaskDelay(1000);
+
+    {   /* Reset */
+        printf("Sending down \"AT+RST\"... ");
+        if(esp8266_cmd_rst()) {
+            printf("Success!\r\n");
+        } else {
+            printf("Failed!\r\n");
+        }
+    }
+
+    {   /* set station mode */
+        printf("Set WIFI Mode to %d... ", ESP8266_WIFI_MODE_STATION);
+        if(esp8266_cmd_set_cwmode_cur(ESP8266_WIFI_MODE_STATION)) {
+            printf("Success!\r\n");
+        } else {
+            printf("Failed!\r\n");
+        }
+    }
+
+    {   /* connect to AP */
+        uint8_t lSSID[] = "AndroidAP";
+        uint8_t lPW[] = "cyvg3835";
+
+        printf("Connecting to AP... ");
+        if(esp8266_cmd_set_cwjap_cur(lSSID, sizeof(lSSID)-1, lPW, sizeof(lPW)-1)) {
+            printf("Success!\r\n");
+        } else {
+            printf("Failed!\r\n");
+        }
+    }
+
+    {   /* do mqtt */
+        MQTTClient client;
+        Network network;
+        int rc = 0;
+        size_t lCount;
+        unsigned char sendbuf[80], readbuf[80];
+        char* address = "iot.eclipse.org";
+
+        MQTTPacket_connectData connectData = MQTTPacket_connectData_initializer;
+
+        NetworkInit(&network);
+        MQTTClientInit(&client, &network, 30000, sendbuf, sizeof(sendbuf), readbuf, sizeof(readbuf));
+
+        if ((rc = NetworkConnect(&network, address, 1883)) != 0) {
+            printf("Return code from network connect is %d\n", rc);
+        }
+
+#if defined(MQTT_TASK)
+        if ((rc = MQTTStartTask(&client)) != pdPASS) {
+            printf("Return code from start tasks is %d\n", rc);
+        }
+#endif
+
+        connectData.MQTTVersion = 3;
+        connectData.clientID.cstring = "FreeRTOS_sample";
+
+        if ((rc = MQTTConnect(&client, &connectData)) != 0) {
+            printf("Return code from MQTT connect is %d\n", rc);
+        }
+        else {
+            printf("MQTT Connected\n");
+        }
+
+        if ((rc = MQTTSubscribe(&client, "FreeRTOS/sample/wep/#", 2, esp8266_mqtt_message_arrived)) != 0) {
+            printf("Return code from MQTT subscribe is %d\n", rc);
+        }
+
+        for(lCount = 0; ; lCount++) {
+
+            MQTTMessage message;
+            char payload[30];
+
+            message.qos = 1;
+            message.retained = 0;
+            message.payload = payload;
+            message.payloadlen = snprintf(payload, sizeof(payload), "msg #%d", lCount);
+
+            if ((rc = MQTTPublish(&client, "FreeRTOS/sample/wep/a", &message)) != 0) {
+                printf("Return code from MQTT publish is %d\n", rc);
+            }
+
+#if !defined(MQTT_TASK)
+            if ((rc = MQTTYield(&client, 1000)) != 0) {
+                printf("Return code from yield is %d\n", rc);
+            }
+#endif
+            vTaskDelay(1000);
+        }
+    }
+}
+
 int main(void) {
 
     NVIC_PriorityGroupConfig( NVIC_PriorityGroup_4 );
@@ -734,9 +878,10 @@ int main(void) {
     setbuf(stdout, NULL);
 
     {   /* create tasks */
-        xTaskCreate(led_task,          ( const char * )"led",     configMINIMAL_STACK_SIZE *  8, NULL, configMAX_PRIORITIES - 1, NULL);
-        xTaskCreate(esp8266_task,      ( const char * )"esp8266", configMINIMAL_STACK_SIZE * 32, NULL, configMAX_PRIORITIES - 2, NULL);
-//        xTaskCreate(esp8266_test_task, ( const char * )"test",    configMINIMAL_STACK_SIZE * 8, NULL, configMAX_PRIORITIES - 3, NULL);
+        xTaskCreate(led_task,          ( const char * )"led",          configMINIMAL_STACK_SIZE *  8, NULL, configMAX_PRIORITIES - 1, NULL);
+        xTaskCreate(esp8266_mqtt_task, ( const char * )"esp8266_mqtt", configMINIMAL_STACK_SIZE * 32, NULL, configMAX_PRIORITIES - 2, NULL);
+//        xTaskCreate(esp8266_task,      ( const char * )"esp8266",    configMINIMAL_STACK_SIZE * 32, NULL, configMAX_PRIORITIES - 2, NULL);
+//        xTaskCreate(esp8266_test_task, ( const char * )"test",       configMINIMAL_STACK_SIZE * 8, NULL, configMAX_PRIORITIES - 3, NULL);
 
         /* Start the scheduler. */
         vTaskStartScheduler();

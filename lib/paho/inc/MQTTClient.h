@@ -58,7 +58,7 @@ extern "C" {
 enum QoS { QOS0, QOS1, QOS2 };
 
 /* all failure return codes must be negative */
-enum returnCode { BUFFER_OVERFLOW = -2, FAILURE = -1, SUCCESS = 0 };
+enum returnCode { BUFFER_OVERFLOW = -2, FAILURE = -1, OK = 0 };
 
 /* The Platform specific header must define the Network and Timer structures and functions
  * which operate on them.
