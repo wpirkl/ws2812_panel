@@ -5,13 +5,13 @@
 
 ## Connections
 
-| STRIP | PIN | TIMER    | DMA               |
-| ----- | --- | -------- | ----------------- |
-|     1 | C6  | TIM3 CH1 | DMA1 CH5 Stream 4 |
-|     2 | D12 | TIM4 CH1 | DMA1 CH2 Stream 0 |
-|     3 | B0  | TIM3 CH3 | DMA1 CH5 Stream 7 |
-|     4 | B1  | TIM3 CH4 | DMA1 CH5 Stream 2 |
-|     5 | B7  | TIM4 CH2 | DMA1 CH2 Stream 3 |
+| STRIP | PIN | TIMER    | DMA               | Comment          |
+| ----- | --- | -------- | ----------------- | ---------------- |
+|     1 | C6  | TIM3 CH1 | DMA1 CH5 Stream 4 |                  |
+|     2 | D12 | TIM4 CH1 | DMA1 CH2 Stream 0 | LD4 in parallel! |
+|     3 | B0  | TIM3 CH3 | DMA1 CH5 Stream 7 |                  |
+|     4 | B1  | TIM3 CH4 | DMA1 CH5 Stream 2 |                  |
+|     5 | B7  | TIM4 CH2 | DMA1 CH2 Stream 3 |                  |
 
 # ESP8266
 
@@ -102,5 +102,22 @@ WIFI GOT IP\r\n
 
 # Eclipse Paho MQTT C/C++ client for Embedded platforms
 
-This repository uses [Eclipse Paho](http://eclipse.org/paho) MQTT C/C++ client library for Embedded platorms.
+## Subscriptions
 
+### Blue Led test
+
+Test to turn blue led on and off:
+
+`FreeRTOS/sample/wep/blueled ON`
+`FreeRTOS/sample/wep/blueled OFF`
+
+## Publish
+
+Nothing yet
+
+# Related articles and code
+
+- Benjamin's robotics [USB-Serial on STM32F4](http://vedder.se/2012/07/usb-serial-on-stm32f4/)
+- UB [78-WS2812-Library](http://mikrocontroller.bplaced.net/wordpress/?page_id=3665)
+- UB [88-WS2812_8CH-Library](http://mikrocontroller.bplaced.net/wordpress/?page_id=4204)
+- [Eclipse Paho](http://eclipse.org/paho) MQTT C/C++ client library for Embedded platorms.

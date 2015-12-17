@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdint.h>
+#include <string.h>
 #include <inttypes.h>
 #include <ctype.h>
 #include <math.h>
@@ -744,6 +745,7 @@ void esp8266_task(void * inParameters) {
     }
 }
 
+/*
 void esp8266_mqtt_message_arrived(MessageData* data) {
 
     printf("Message arrived on topic %.*s: %.*s\r\n",
@@ -751,6 +753,27 @@ void esp8266_mqtt_message_arrived(MessageData* data) {
         data->topicName->lenstring.data,
         data->message->payloadlen,
         (char*)data->message->payload);
+}
+*/
+
+static const char sOn[]  = { 'O', 'N' };
+static const char sOff[] = { 'O', 'F', 'F' };
+
+void esp8266_mqtt_blueled_arrived(MessageData* data) {
+
+    printf("Message arrived on topic %.*s: %.*s\r\n",
+        data->topicName->lenstring.len,
+        data->topicName->lenstring.data,
+        data->message->payloadlen,
+        (char*)data->message->payload);
+
+    if(data->message->payloadlen == sizeof(sOn) && memcmp(data->message->payload, sOn, data->message->payloadlen) == 0) {
+
+        GPIO_SetBits(GPIOD, GPIO_Pin_15);
+    } else if(data->message->payloadlen == sizeof(sOff) && memcmp(data->message->payload, sOff, data->message->payloadlen) == 0) {
+
+        GPIO_ResetBits(GPIOD, GPIO_Pin_15);
+    }
 }
 
 void esp8266_mqtt_task(void * inParameters) {
@@ -804,6 +827,19 @@ void esp8266_mqtt_task(void * inParameters) {
         }
     }
 
+    {   /* init blue led on PD15 */
+        GPIO_InitTypeDef GPIO_InitStructure;
+
+        GPIO_InitStructure.GPIO_Pin   = GPIO_Pin_15;
+        GPIO_InitStructure.GPIO_Mode  = GPIO_Mode_OUT;
+        GPIO_InitStructure.GPIO_Speed = GPIO_Speed_2MHz;
+        GPIO_InitStructure.GPIO_OType = GPIO_OType_PP;
+        GPIO_InitStructure.GPIO_PuPd  = GPIO_PuPd_NOPULL;
+        GPIO_Init(GPIOD, &GPIO_InitStructure);
+
+        GPIO_ResetBits(GPIOD, GPIO_Pin_15);
+    }
+
     {   /* do mqtt */
         MQTTClient client;
         Network network;
@@ -818,12 +854,12 @@ void esp8266_mqtt_task(void * inParameters) {
         MQTTClientInit(&client, &network, 30000, sendbuf, sizeof(sendbuf), readbuf, sizeof(readbuf));
 
         if ((rc = NetworkConnect(&network, address, 1883)) != 0) {
-            printf("Return code from network connect is %d\n", rc);
+            printf("Return code from network connect is %d\r\n", rc);
         }
 
 #if defined(MQTT_TASK)
         if ((rc = MQTTStartTask(&client)) != pdPASS) {
-            printf("Return code from start tasks is %d\n", rc);
+            printf("Return code from start tasks is %d\n\n", rc);
         }
 #endif
 
@@ -831,36 +867,42 @@ void esp8266_mqtt_task(void * inParameters) {
         connectData.clientID.cstring = "FreeRTOS_sample";
 
         if ((rc = MQTTConnect(&client, &connectData)) != 0) {
-            printf("Return code from MQTT connect is %d\n", rc);
+            printf("Return code from MQTT connect is %d\r\n", rc);
         }
         else {
-            printf("MQTT Connected\n");
+            printf("MQTT Connected\r\n");
         }
 
-        if ((rc = MQTTSubscribe(&client, "FreeRTOS/sample/wep/#", 2, esp8266_mqtt_message_arrived)) != 0) {
-            printf("Return code from MQTT subscribe is %d\n", rc);
+/*
+        if((rc = MQTTSubscribe(&client, "FreeRTOS/sample/wep/cnt", 2, esp8266_mqtt_message_arrived)) != 0) {
+            printf("Return code from MQTT subscribe is %d\r\n", rc);
+        }
+*/
+        if((rc = MQTTSubscribe(&client, "FreeRTOS/sample/wep/blueled", 2, esp8266_mqtt_blueled_arrived)) != 0) {
+            printf("Return code from MQTT subscribe is %d\r\n", rc);
         }
 
         for(lCount = 0; ; lCount++) {
-
+/*
             MQTTMessage message;
             char payload[30];
 
             message.qos = 1;
             message.retained = 0;
             message.payload = payload;
-            message.payloadlen = snprintf(payload, sizeof(payload), "msg #%d", lCount);
+            message.payloadlen = snprintf(payload, sizeof(payload), "%d", lCount);
 
-            if ((rc = MQTTPublish(&client, "FreeRTOS/sample/wep/a", &message)) != 0) {
-                printf("Return code from MQTT publish is %d\n", rc);
+            if ((rc = MQTTPublish(&client, "FreeRTOS/sample/wep/cnt", &message)) != 0) {
+                printf("Return code from MQTT publish is %d\r\n", rc);
             }
+*/
 
 #if !defined(MQTT_TASK)
-            if ((rc = MQTTYield(&client, 1000)) != 0) {
-                printf("Return code from yield is %d\n", rc);
+            if ((rc = MQTTYield(&client, 100)) != 0) {
+                printf("Return code from yield is %d\r\n", rc);
             }
 #endif
-            vTaskDelay(1000);
+//            vTaskDelay(1000);
         }
     }
 }
