@@ -14,7 +14,7 @@ DEPS = $(addprefix $(OBJDIR)/,$(SRCS:.c=.dep) $(CPPSRCS:.cpp=.dep))
 
 CPPOBJS = $(addprefix $(OBJDIR)/,$(CPPSRCS:.cpp=.obj))
 
-CFLAGS  = -g -O2 -Wall
+CFLAGS  = -O2 -Wall
 CFLAGS += -mlittle-endian
 CFLAGS += -mthumb
 CFLAGS += -mthumb-interwork

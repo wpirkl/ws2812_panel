@@ -34,6 +34,7 @@ LIBS += usbdevcore
 LIBS += usbdevcdc
 LIBS += usbcore
 LIBS += ws2812
+LIBS += http
 LIBS += esp8266
 LIBS += paho
 LIBS += stdperiph
@@ -45,6 +46,7 @@ LIBPATH_usbcore    = $(LIBPATH)/USB_OTG
 LIBPATH_ws2812     = $(LIBPATH)/ws2812
 LIBPATH_esp8266    = $(LIBPATH)/esp8266
 LIBPATH_paho       = $(LIBPATH)/paho
+LIBPATH_http       = $(LIBPATH)/http
 LIBPATH_stdperiph  = $(LIBPATH)/StdPeriph
 LIBPATH_freertos   = $(LIBPATH)/FreeRTOS
 

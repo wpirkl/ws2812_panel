@@ -109,6 +109,7 @@ WIFI GOT IP\r\n
 Test to turn blue led on and off:
 
 `FreeRTOS/sample/wep/blueled ON`
+
 `FreeRTOS/sample/wep/blueled OFF`
 
 ## Publish
