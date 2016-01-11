@@ -6,6 +6,12 @@
 
 typedef struct {
 
+    /*! Length of the filename */
+    const size_t            mFilenameLen;
+
+    /*! Length of the file */
+    const size_t            mFileLength;
+
     /*! The file name */
     const char * const      mFileName;
 

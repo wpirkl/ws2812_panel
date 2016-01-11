@@ -1,7 +1,9 @@
 #include <stdbool.h>
 #include <string.h>
 #include <stdlib.h>
+#include <stddef.h>
 #include <ctype.h>
+#include <stdio.h>
 
 #include "FreeRTOS.h"
 #include "esp8266.h"
@@ -15,12 +17,22 @@
     \todo Check if we loaded the whole content
 */
 
+#define dbg_on(x...)      printf(x)
+#define dbg_off(x...)
 
+#define dbg dbg_off
+
+#define HTTP_BUFFER_SIZE    (512)
+
+#define HTTP_BODY_SIZE      (512)
 
 /* typedefs */
 
 /*! server object */
 typedef struct  {
+
+    /*! Socket object to send / receive on */
+    ts_esp8266_socket   * mSocket;
 
     /*! Parser index */
     size_t      mParseIndex;
@@ -30,6 +42,12 @@ typedef struct  {
 
     /*! Length of the URL */
     size_t      mURLLen;
+
+    /*! Url Encoded Data */
+    uint8_t   * mURLEncodedData;
+
+    /*! Length of the URL encoded data */
+    size_t      mURLEncodedDataLen;
 
     /*! Protocol */
     uint8_t   * mProtocol;
@@ -41,7 +59,13 @@ typedef struct  {
     size_t      mBufferSize;
 
     /*! buffer */
-    uint8_t     mBuffer[1024];
+    uint8_t     mBuffer[HTTP_BUFFER_SIZE];
+
+    /*! Size of body */
+    size_t      mBodySize;
+
+    /*! Body */
+    uint8_t     mBody[HTTP_BODY_SIZE];
 
 } ts_http_server;
 
@@ -91,16 +115,16 @@ typedef struct {
     size_t          mStringLen;
 
     /*! numeric */
-    uint32_t        mNumeric;
+    int             mNumeric;
 
 } ts_html_reply;
 
 /* forwards declaration */
 
 static void esp8266_http_server_handler_task(ts_esp8266_socket * inSocket);
-static void esp8266_http_parse(ts_esp8266_socket * inSocket, ts_http_server * inHttpServer);
+static bool esp8266_http_parse(ts_http_server * inHttpServer);
 
-static void esp8266_http_handle_get(ts_esp8266_socket * inSocket, ts_http_server * inHttpServer);
+static bool esp8266_http_handle_get(ts_http_server * inHttpServer);
 
 
 bool esp8266_http_server_start(void) {
@@ -116,26 +140,45 @@ static void esp8266_http_server_handler_task(ts_esp8266_socket * inSocket) {
     /* local variables */
     ts_http_server lHttpServer;
 
+    dbg("Server started on socket %p\r\n", inSocket);
+
+    /* initialize without mBuffer */
     memset(&lHttpServer, 0, sizeof(lHttpServer));
 
-    for(;;) {
+    lHttpServer.mSocket = inSocket;
 
-        /* read data */
-        if(esp8266_receive(inSocket, lHttpServer.mBuffer, sizeof(lHttpServer.mBuffer), &lHttpServer.mBufferSize)) {
+//    lHttpServer.mBuffer = malloc(HTTP_BUFFER_SIZE);
+//    if(lHttpServer.mBuffer) {
+        for(;;) {
 
-            /* check if we receive something */
-            if(lHttpServer.mBufferSize > 0) {
+            /* read data */
+            if(esp8266_receive(lHttpServer.mSocket, lHttpServer.mBuffer, HTTP_BUFFER_SIZE, &lHttpServer.mBufferSize)) {
 
-                esp8266_http_parse(inSocket, &lHttpServer);
+                /* check if we receive something */
+                if(lHttpServer.mBufferSize > 0) {
+
+                    /* parse failed, kill connection */
+                    if(!esp8266_http_parse(&lHttpServer)) {
+                        dbg("Parsing failed!\r\n");
+                        break;
+                    }
+                }
+            } else {
+                /* server error */
+                break;
             }
-        } else {
-            /* server error */
-            break;
         }
-    }
+
+//        free(lHttpServer.mBuffer);
+//    } else {
+//        dbg("Malloc failed\r\n");
+//    }
+
+    dbg("Closing socket %p\r\n", inSocket);
 }
 
 
+/*! HTTP Commands */
 static const ts_esp8266_web_command sWebCommands[] = {
     { 3, "GET",     ECMD_GET },
     { 4, "POST",    ECMD_POST },
@@ -148,6 +191,8 @@ static const ts_esp8266_web_command sWebCommands[] = {
     { 5, "PATCH",   ECMD_PATCH },
 };
 
+
+/*! HTTP Replies */
 static const ts_html_reply sReturnCodes[] = {
     { HTML_REPLY_OK,                    "OK",                    2,  200 },
     { HTML_REPLY_NOT_FOUND,             "Not Found",             9,  404 },
@@ -181,7 +226,7 @@ static size_t esp8266_http_parse_skip_spaces(ts_http_server * inHttpServer, size
 static size_t esp8266_http_parse_skip_characters(ts_http_server * inHttpServer, size_t inIndex) {
 
     /* skip non white spaces */
-    while(isspace(inHttpServer->mBuffer[inIndex]) && inIndex < inHttpServer->mBufferSize) {
+    while(!isspace(inHttpServer->mBuffer[inIndex]) && inIndex < inHttpServer->mBufferSize) {
         inIndex++;
     }
 
@@ -277,6 +322,36 @@ static bool esp8266_http_get_header_field(ts_http_server * inHttpServer, uint8_t
 }
 
 
+/*! Get End of Header
+
+    \param[in]  inHttpServer        HTTP Server context
+    \param[out] outEndOfHeaderIdx   Returns the index of the end of the header (beginning of data)
+
+    \retval true    End of header found
+    \retval false   End of header was not found
+*/
+static bool esp8266_http_end_of_header(ts_http_server * inHttpServer, size_t * outEndOfHeaderIdx) {
+
+    size_t lCount = inHttpServer->mParseIndex;
+
+    size_t lLineSize;
+
+    for(;lCount < inHttpServer->mBufferSize;) {
+
+        lLineSize = esp8266_http_parse_next_line(inHttpServer, lCount) - lCount;
+        if(lLineSize == 2) {    /* end of header */
+            *outEndOfHeaderIdx = lCount + lLineSize;
+            return true;
+        } else {
+            lCount += lLineSize;
+        }
+    }
+
+    /* end of header was not found! */
+    return false;
+}
+
+
 /*! Parse URL
 */
 static void esp8266_http_parse_url(ts_http_server * inHttpServer) {
@@ -286,7 +361,7 @@ static void esp8266_http_parse_url(ts_http_server * inHttpServer) {
         inHttpServer->mURL = (uint8_t*)"index.html";
         inHttpServer->mURLLen = 10;
 
-    } else if(inHttpServer->mURLLen > 1 && inHttpServer->mURL[0] == '/') {      /* remove leading spaces */
+    } else if(inHttpServer->mURLLen > 1 && inHttpServer->mURL[0] == '/') {      /* remove leading slash */
 
         inHttpServer->mURL = &inHttpServer->mURL[1];
         inHttpServer->mURLLen--;
@@ -294,10 +369,64 @@ static void esp8266_http_parse_url(ts_http_server * inHttpServer) {
 }
 
 
+/*! Send Reply
+
+    \param[in]  inHttpServer    HTTP context
+    \param[in]  inContent       HTTP content to send
+    \param[in]  inReply         The reply to send
+*/
+static bool esp8266_http_send_reply(ts_http_server * inHttpServer, const ts_web_content_file * inContent, te_html_reply inReply) {
+
+    inHttpServer->mBufferSize = 0;
+    inHttpServer->mBufferSize += snprintf((char*)&inHttpServer->mBuffer[inHttpServer->mBufferSize], HTTP_BUFFER_SIZE - inHttpServer->mBufferSize,
+                                          "HTTP/1.1 %d %s\r\n", sReturnCodes[inReply].mNumeric, sReturnCodes[inReply].mString);
+
+    if(inContent != NULL) {
+
+        /* prepare data */
+        web_content_prepare_output(inContent, (char*)inHttpServer->mBody, HTTP_BODY_SIZE, &inHttpServer->mBodySize);
+
+        inHttpServer->mBufferSize += snprintf((char*)&inHttpServer->mBuffer[inHttpServer->mBufferSize], HTTP_BUFFER_SIZE - inHttpServer->mBufferSize,
+                                              "Content-Type: %s\r\n", web_content_get_type(inContent));
+
+        inHttpServer->mBufferSize += snprintf((char*)&inHttpServer->mBuffer[inHttpServer->mBufferSize], HTTP_BUFFER_SIZE - inHttpServer->mBufferSize,
+                                              "Content-Length: %d\r\n", inHttpServer->mBodySize);
+    }
+
+    /* end of header */
+    inHttpServer->mBufferSize += snprintf((char*)&inHttpServer->mBuffer[inHttpServer->mBufferSize], HTTP_BUFFER_SIZE - inHttpServer->mBufferSize,
+                                           "\r\n");
+
+    /* just for debug */
+    inHttpServer->mBuffer[inHttpServer->mBufferSize] = '\0';
+    dbg("Header length: %d\r\n", inHttpServer->mBufferSize);
+    dbg("Sending header:\r\n\"%s\"\r\n", inHttpServer->mBuffer);
+
+    /* send header */
+    if(!esp8266_cmd_cipsend_tcp(inHttpServer->mSocket, inHttpServer->mBuffer, inHttpServer->mBufferSize)) {
+        return false;
+    }
+
+    /* send data */
+    if(inContent != NULL) {
+
+        /* just for debug */
+        inHttpServer->mBody[inHttpServer->mBodySize] = '\0';
+        dbg("Body length: %d\r\n", inHttpServer->mBodySize);
+        dbg("Sending Body:\r\n\"%s\"\r\n", inHttpServer->mBody);
+
+        return esp8266_cmd_cipsend_tcp(inHttpServer->mSocket, inHttpServer->mBody, inHttpServer->mBodySize);
+    }
+
+    return true;
+}
+
+
 /*! Parse http header
 
+    \param[in]  inHttpServer    HTTP context
 */
-static void esp8266_http_parse(ts_esp8266_socket * inSocket, ts_http_server * inHttpServer) {
+static bool esp8266_http_parse(ts_http_server * inHttpServer) {
 
     size_t lCount;
 
@@ -321,6 +450,11 @@ static void esp8266_http_parse(ts_esp8266_socket * inSocket, ts_http_server * in
         key1=value1&key2=value2&...&keyn=valuen\r\n
     */
 
+    /* just for debug */
+    inHttpServer->mBuffer[inHttpServer->mBufferSize] = '\0';
+    dbg("Received from server:\r\n\"%s\"\r\n", inHttpServer->mBuffer);
+    dbg("Length: %d\r\n", inHttpServer->mBufferSize);
+
     inHttpServer->mParseIndex = 0;
 
     /* find out which command was received */
@@ -331,6 +465,7 @@ static void esp8266_http_parse(ts_esp8266_socket * inSocket, ts_http_server * in
 
             lWebCommand = sWebCommands[lCount].mCommandType;
             inHttpServer->mParseIndex = lCommandLen;
+            dbg("Found command: %s\r\n", sWebCommands[lCount].mCommandName);
             break;
         }
     }
@@ -356,14 +491,15 @@ static void esp8266_http_parse(ts_esp8266_socket * inSocket, ts_http_server * in
 
     /* mParseIndex now points to the first header field */
 
-    esp8266_http_parse_url(inHttpServer);
+    /* just for debug */
+    inHttpServer->mURL[inHttpServer->mURLLen] = '\0';
+    dbg("Got URL: \"%s\"\r\n", inHttpServer->mURL);
 
     /* process the command */
     switch(lWebCommand) {
         case ECMD_GET:
             /* parse url, there could be url encoded data */
-            esp8266_http_handle_get(inSocket, inHttpServer);
-            break;
+            return esp8266_http_handle_get(inHttpServer);
         case ECMD_HEAD:
         case ECMD_POST:
         case ECMD_PUT:
@@ -373,27 +509,100 @@ static void esp8266_http_parse(ts_esp8266_socket * inSocket, ts_http_server * in
         case ECMD_CONNECT:
         case ECMD_PATCH:
         default:
-            break;
+            return false;
     }
+}
+
+
+/*! HTTP GET - Get URL encoded data
+
+    \param[in]  inHttpServer            HTTP context
+
+    \retval true    URL encoded data found
+    \retval false   No data found
+*/
+static bool esp8266_http_get_get_url_encoded_data(ts_http_server * inHttpServer) {
+
+    size_t lCount;
+    bool lRetVal = false;
+
+    for(lCount = 0; lCount < inHttpServer->mURLLen; lCount++) {
+
+        if(inHttpServer->mURL[lCount] == '?') {
+
+            /* all characters after ? are url encoded */
+
+            /* check if there's space left in the encoded data */
+            if(lCount + 1 < inHttpServer->mURLLen) {
+
+                inHttpServer->mURLEncodedData = &inHttpServer->mURL[lCount+1];
+                inHttpServer->mURLEncodedDataLen = inHttpServer->mURLLen - (lCount + 1);
+                lRetVal = true;
+            } else {
+
+                inHttpServer->mURLEncodedData = NULL;
+                inHttpServer->mURLEncodedDataLen = 0;
+                lRetVal = false;
+            }
+
+            /* so remove the data from the url */
+            inHttpServer->mURLLen = lCount;
+
+            return lRetVal;
+        }
+    }
+
+    inHttpServer->mURLEncodedData = NULL;
+    inHttpServer->mURLEncodedDataLen = 0;
+
+    return false;
 }
 
 
 /*! Handle GET
 
+    Handles HTTP Get
+
+    \param[in]  inSocket        Socket to send / retreive from
 */
-static void esp8266_http_handle_get(ts_esp8266_socket * inSocket, ts_http_server * inHttpServer) {
+static bool esp8266_http_handle_get(ts_http_server * inHttpServer) {
 
     const ts_web_content_file * lContent = NULL;
+    te_html_reply lReply = HTML_REPLY_INTERNAL_SERVER_ERROR;
+
+    if(esp8266_http_get_get_url_encoded_data(inHttpServer)) {
+
+        /* just for debug */
+        inHttpServer->mURLEncodedData[inHttpServer->mURLEncodedDataLen] = '\0';
+        dbg("URL Encoded data: \"%s\"\r\n", inHttpServer->mURLEncodedData);
+    }
+
+    /* parse url */
+    esp8266_http_parse_url(inHttpServer);
+
+    /* process url encoded data */
+    web_content_parse_url_encoded_data((char*)inHttpServer->mURLEncodedData, inHttpServer->mURLEncodedDataLen);
+
+    /* notify parsing done */
+    web_content_notify_parsing_done();
+
+    /* just for debug */
+    inHttpServer->mURL[inHttpServer->mURLLen] = '\0';
+    dbg("URL after parse: \"%s\"\r\n", inHttpServer->mURL);
 
     /* get the content */
     if(web_content_find_file(inHttpServer->mURL, inHttpServer->mURLLen, &lContent)) {
-        
+
+        lReply = HTML_REPLY_OK;
+
     } else {
+        lReply = HTML_REPLY_NOT_FOUND;
+
         /* get the 404 page */
         web_content_find_file((uint8_t*)"404.html", 8, &lContent);
     }
 
-    
+    return esp8266_http_send_reply(inHttpServer, lContent, lReply);
 }
 
 

@@ -61,9 +61,9 @@ int main(int argc, char * argv[]) {
         printf("File length is: %d\n", lFileLength);
         printf("File name length is: %d\n", lFileNameLength);
 
-        fprintf(lOutputFile, "        {\n");
-//        fprintf(lOutputFile, "            .mFilenameLen = %d,\n", lFileNameLength);
-//        fprintf(lOutputFile, "            .mFileLength = %d,\n",  lFileLength);
+        fprintf(lOutputFile, "        { /* %s */\n", argv[lCount]);
+        fprintf(lOutputFile, "            .mFilenameLen = %d,\n", lFileNameLength);
+        fprintf(lOutputFile, "            .mFileLength = %d,\n",  lFileLength);
         fprintf(lOutputFile, "            .mFileName = \"");
 
         printf("Encoding filename\n");

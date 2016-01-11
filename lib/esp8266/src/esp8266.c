@@ -218,6 +218,9 @@ void esp8266_init(void) {
 #endif /* ESP8266_FREERTOS */
 }
 
+#undef dbg
+#define dbg dbg_off
+
 /*! Server Task
 
     \param[in]  inParameters    Socket ID
@@ -253,6 +256,9 @@ static void esp8266_server_handler_task(void * inParameters) {
     /* delete this task */
     vTaskDelete(NULL);
 }
+
+#undef dbg
+#define dbg dbg_off
 
 /*! This function handles asynchronous incoming data
 */
@@ -358,6 +364,9 @@ static bool esp8266_rx_handle_wifi(void) {
     return false;
 }
 
+#undef dbg
+#define dbg dbg_off
+
 /*! This function handles x,CLOSED or X,CONNECT asynchronous messages
     \todo implement
 */
@@ -421,6 +430,9 @@ static bool esp8266_rx_handle_socket(void) {
 
     return false;
 }
+
+#undef dbg
+#define dbg dbg_off
 
 /*! Handles generic command responses
 

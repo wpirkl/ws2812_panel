@@ -21,6 +21,10 @@
 #include "ws2812.h"
 
 #include "esp8266.h"
+#include "esp8266_http_server.h"
+
+#include "web_content_handler.h"
+
 #include "uart_dma.h"
 
 #include "FreeRTOS.h"
@@ -745,6 +749,120 @@ void esp8266_task(void * inParameters) {
     }
 }
 
+bool esp8266_http_test_web_content_get_ver(char * outBuffer, size_t inBufferSize, size_t * outBufferLen) {
+
+    printf("%s(%d)\r\n", __func__, __LINE__);
+
+    *outBufferLen = snprintf(outBuffer, inBufferSize, "1.0");
+
+    return true;
+}
+
+static const ts_web_content_handlers sTestWebContent = {
+
+    .mHandlerCount = 1,
+    .mParsingDone = NULL,
+    .mHandler = {
+        {
+            .mToken = "ver",
+            .mGet = esp8266_http_test_web_content_get_ver,
+            .mSet = NULL,
+        }
+    }
+};
+
+void esp8266_http_test(void * inParameters) {
+
+    TaskHandle_t xHandle = NULL;
+    BaseType_t lRetVal;
+
+    vTaskDelay(10000);
+
+    printf("Initialize ESP8266... ");
+    esp8266_init();
+    printf("done\r\n");
+
+    /* create rx task */
+    lRetVal = xTaskCreate(esp8266_rx_task, ( const char * )"esp8266_rx", configMINIMAL_STACK_SIZE * 4, NULL, configMAX_PRIORITIES - 2, &xHandle);
+    if(lRetVal) {
+        printf("Successfully started RX Task\r\n");
+    } else {
+        printf("Failed starting RX Task\r\n");
+    }
+
+    vTaskDelay(1000);
+
+    {   /* Reset */
+        printf("Sending down \"AT+RST\"... ");
+        if(esp8266_cmd_rst()) {
+            printf("Success!\r\n");
+        } else {
+            printf("Failed!\r\n");
+        }
+    }
+
+    {   /* Disable echo */
+        printf("Sending down \"ATE0\"... ");
+        if(esp8266_cmd_ate0()) {
+            printf("Success!\r\n");
+        } else {
+            printf("Failed!\r\n");
+        }
+    }
+
+    {   /* Set multiple connections */
+        printf("Set multiple connections... ");
+        if(esp8266_cmd_set_cipmux(true)) {
+            printf("Success!\r\n");
+        } else {
+            printf("Failed!\r\n");
+        }
+    }
+
+    {   /* set station mode */
+        printf("Set WIFI Mode to %d... ", ESP8266_WIFI_MODE_AP);
+        if(esp8266_cmd_set_cwmode_cur(ESP8266_WIFI_MODE_AP)) {
+            printf("Success!\r\n");
+        } else {
+            printf("Failed!\r\n");
+        }
+    }
+
+    {   /* configure AP */
+        uint8_t lSSIDBuffer[32];
+        size_t  lSSIDBufferLen;
+
+        uint8_t lPWDBuffer[64];
+        size_t  lPWDBufferLen;
+
+        lSSIDBufferLen = snprintf((char*)lSSIDBuffer, sizeof(lSSIDBuffer), "%s", "WP_AP");
+        lPWDBufferLen  = snprintf((char*)lPWDBuffer,  sizeof(lPWDBuffer),  "%s", "deadbeef");
+
+        printf("SSID: \"%s\"\r\n", lSSIDBuffer);
+        printf("PASS: \"%s\"\r\n", lPWDBuffer);
+
+        printf("Setting Access Point... ");
+        if(esp8266_cmd_set_cwsap_cur(lSSIDBuffer, lSSIDBufferLen, lPWDBuffer, lPWDBufferLen, 11, ESP8266_ENC_MODE_WPA2_PSK)) {
+            printf("Success!\r\n");
+        } else {
+            printf("Failed!\r\n");
+        }
+    }
+
+    {   /* set web content handlers */
+        printf("Set web content handlers\r\n");
+        web_content_set_handlers(&sTestWebContent);
+    }
+
+    {   /* start http server */
+        printf("Start HTTP server\r\n");
+        esp8266_http_server_start();
+    }
+
+    /* delete this task */
+    vTaskDelete(NULL);
+}
+
 /*
 void esp8266_mqtt_message_arrived(MessageData* data) {
 
@@ -800,6 +918,15 @@ void esp8266_mqtt_task(void * inParameters) {
     {   /* Reset */
         printf("Sending down \"AT+RST\"... ");
         if(esp8266_cmd_rst()) {
+            printf("Success!\r\n");
+        } else {
+            printf("Failed!\r\n");
+        }
+    }
+
+    {   /* Disable echo */
+        printf("Sending down \"ATE0\"... ");
+        if(esp8266_cmd_ate0()) {
             printf("Success!\r\n");
         } else {
             printf("Failed!\r\n");
@@ -921,9 +1048,11 @@ int main(void) {
 
     {   /* create tasks */
         xTaskCreate(led_task,          ( const char * )"led",          configMINIMAL_STACK_SIZE *  8, NULL, configMAX_PRIORITIES - 1, NULL);
-        xTaskCreate(esp8266_mqtt_task, ( const char * )"esp8266_mqtt", configMINIMAL_STACK_SIZE * 32, NULL, configMAX_PRIORITIES - 2, NULL);
+//        xTaskCreate(esp8266_mqtt_task, ( const char * )"esp8266_mqtt", configMINIMAL_STACK_SIZE * 32, NULL, configMAX_PRIORITIES - 2, NULL);
+        xTaskCreate(esp8266_http_test, ( const char * )"http",         configMINIMAL_STACK_SIZE * 32, NULL, configMAX_PRIORITIES - 2, NULL);
 //        xTaskCreate(esp8266_task,      ( const char * )"esp8266",    configMINIMAL_STACK_SIZE * 32, NULL, configMAX_PRIORITIES - 2, NULL);
 //        xTaskCreate(esp8266_test_task, ( const char * )"test",       configMINIMAL_STACK_SIZE * 8, NULL, configMAX_PRIORITIES - 3, NULL);
+
 
         /* Start the scheduler. */
         vTaskStartScheduler();
