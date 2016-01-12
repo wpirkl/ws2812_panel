@@ -44,6 +44,7 @@ register char * stack_ptr asm ("sp");
 
 caddr_t _sbrk_r (struct _reent *r, int incr) {
 	extern char   end asm ("end"); /* Defined by the linker.  */
+//	extern char   top_of_memory asm ("_estack");
 	static char * heap_end;
 	char *        prev_heap_end;
 
@@ -52,10 +53,14 @@ caddr_t _sbrk_r (struct _reent *r, int incr) {
 
 	prev_heap_end = heap_end;
 
-	if (heap_end + incr > stack_ptr) {
+    /* WEP: stack_ptr is in CCM 0x10000000
+            whereas heap is in regular memory 0x20000000
+            So rather check if heap touches end of memory
+    */
+//	if (heap_end + incr > top_of_memory) {
 		//errno = ENOMEM;
-		return (caddr_t) -1;
-	}
+//		return (caddr_t) -1;
+//	}
 
 	heap_end += incr;
 
