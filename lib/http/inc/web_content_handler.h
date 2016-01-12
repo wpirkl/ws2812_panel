@@ -14,10 +14,10 @@ typedef struct {
     const char * const    mToken;
 
     /*! Getter */
-    bool               (* mGet)(char * outBuffer, size_t inBufferSize, size_t * outBufferLen);
+    bool               (* mGet)(void * inUserData, char * outBuffer, size_t inBufferSize, size_t * outBufferLen);
 
     /*! Setter */
-    bool               (* mSet)(const char * const inValue, size_t inValueLength);
+    bool               (* mSet)(void * inUserData, const char * const inValue, size_t inValueLength);
 
 } ts_web_content_handler;
 
@@ -28,8 +28,14 @@ typedef struct {
     /*! Number of web content handlers*/
     size_t                      mHandlerCount;
 
+    /*! Parsing start handler */
+    void                     (* mParsingStart)(void * inUserData);
+
     /*! Parsing done handler */
-    void                     (* mParsingDone)(void);
+    void                     (* mParsingDone)(void * inUserData);
+
+    /*! User data */
+    void                      * mUserData;
 
     /*! Web content handlers */
     ts_web_content_handler      mHandler[];
@@ -99,6 +105,11 @@ bool web_content_prepare_output(const ts_web_content_file * inWebContent, char *
 */
 void web_content_notify_parsing_done(void);
 
+/*! Notify parsing start
+
+*/
+void web_content_notify_parsing_start(void);
+
 
 /*! Process URL encoded data
 
@@ -106,6 +117,8 @@ void web_content_notify_parsing_done(void);
     \param[in]  inURLEncodedDataLen Length of the URL encoded data
 */
 bool web_content_parse_url_encoded_data(char * inURLEncodedData, size_t inURLEncodedDataLen);
+
+
 
 #endif /* WEB_CONTENT_HANDLER_H_ */
 

@@ -13,6 +13,20 @@
 
 #define dbg dbg_off
 
+/*! Defines a content type */
+typedef enum {
+    MIME_HTML = 0,
+    MIME_CSS,
+    MIME_JS,
+    MIME_PNG,
+    MIME_JPG,
+    MIME_GIF,
+    MIME_TXT,
+    MIME_BIN,
+    /* ... */
+    MIME_LAST,
+} te_web_content_type;
+
 /*! Defines the web content type */
 typedef struct {
     /*! Extention of the file */
@@ -20,6 +34,7 @@ typedef struct {
 
     /*! MIME type definition */
     const char  * mType;
+
 } ts_web_content_type;
 
 /*! Defines parser states */
@@ -45,6 +60,18 @@ typedef enum {
     /*! Parser found <!-- token --> and is able to process data */
     WEB_PARSER_TOKEN_PROCESS,
 } te_web_parser_state;
+
+/*! Defines url encoded data parser */
+typedef enum {
+    /*! Idle state, waiting for character */
+    URL_PARSER_STATE_IDLE,
+    /*! Waiting for token end */
+    URL_PARSER_TOKEN,
+    /*! Value start */
+    URL_PARSER_START_VALUE,
+    /*! Waiting for value end */
+    URL_PARSER_VALUE,
+} te_url_parser_state;
 
 /*! Stores the web content handlers */
 static const ts_web_content_handlers * sWebContentHandlers = NULL;
@@ -81,16 +108,19 @@ const ts_web_content_type sWebContentType[] = {
     { "jpg",  "image/jpeg" },
     { "gif",  "image/gif" },
     { "txt",  "text/plain" },
+    { "bin",  "application/octet-stream" },
 //    { "mp3",  "audio/mpeg3" },
 //    { "wav",  "audio/wav" },
 //    { "flac", "audio/ogg" },
 //    { "pdf",  "application/pdf" },
-    { "ttf",  "application/x-font-ttf" },
-    { "ttc",  "application/x-font-ttf" }
+//    { "ttf",  "application/x-font-ttf" },
+//    { "ttc",  "application/x-font-ttf" }
 };
 
 
-const char * web_content_get_type(const ts_web_content_file * inWebContent) {
+te_web_content_type web_content_get_enum(const ts_web_content_file * inWebContent) {
+
+    te_web_content_type lContentType = MIME_BIN;
 
     size_t lCount;
     size_t lIndex = 0;
@@ -104,16 +134,23 @@ const char * web_content_get_type(const ts_web_content_file * inWebContent) {
         }
     }
 
-    if(lLength > 0) {   /* in case we didn't find the point, return text/html */
-
-        for(lCount = 0; lCount < sizeof(sWebContentType) / sizeof(ts_web_content_type); lCount++) {
-
-            if(strlen(sWebContentType[lCount].mExtension) == lLength && memcmp(&inWebContent->mFileName[lIndex], sWebContentType[lCount].mExtension, lLength) == 0) {
-                return sWebContentType[lCount].mType;
+    if(lLength > 0) {
+        for(lContentType = MIME_HTML; lContentType < MIME_LAST; lContentType++) {
+            if(strlen(sWebContentType[lContentType].mExtension) == lLength && memcmp(&inWebContent->mFileName[lIndex], sWebContentType[lContentType].mExtension, lLength) == 0) {
+                break;
             }
         }
     }
-    return sWebContentType[0].mType;
+
+    return lContentType;
+}
+
+
+const char * web_content_get_type(const ts_web_content_file * inWebContent) {
+
+    te_web_content_type lContentType = web_content_get_enum(inWebContent);
+
+    return sWebContentType[lContentType].mType;
 }
 
 
@@ -143,7 +180,7 @@ bool web_content_get_token_value(const char * const inToken, size_t inTokenLengt
 
                     dbg("Handler is not null\r\n");
 
-                    return sWebContentHandlers->mHandler[lCount].mGet(outBuffer, inBufferSize, outBufferLen);
+                    return sWebContentHandlers->mHandler[lCount].mGet(sWebContentHandlers->mUserData, outBuffer, inBufferSize, outBufferLen);
                 } else {
 
                     dbg("Handler is not registered\r\n");
@@ -174,7 +211,7 @@ bool web_gontent_set_token_value(const char * const inToken, size_t inTokenLengt
 
                 if(sWebContentHandlers->mHandler[lCount].mSet) {
 
-                    return sWebContentHandlers->mHandler[lCount].mSet(inValue, inValueLength);
+                    return sWebContentHandlers->mHandler[lCount].mSet(sWebContentHandlers->mUserData, inValue, inValueLength);
                 } else {
 
                     /* no handler registered */
@@ -222,6 +259,12 @@ bool web_content_prepare_output(const ts_web_content_file * inWebContent, char *
     size_t lWrittenLength = 0;
 
     te_web_parser_state lState = WEB_PARSER_IDLE;
+
+    te_web_content_type lContentType = web_content_get_enum(inWebContent);
+    if(lContentType != MIME_HTML) {
+        dbg("Don't parse MIME Type: \"%s\"\r\n", sWebContentType[lContentType].mType);
+        return true;
+    }
 
     dbg("Parsing\r\n");
 
@@ -351,15 +394,125 @@ void web_content_notify_parsing_done(void) {
 
     if(sWebContentHandlers) {
         if(sWebContentHandlers->mParsingDone) {
-            sWebContentHandlers->mParsingDone();
+            sWebContentHandlers->mParsingDone(sWebContentHandlers->mUserData);
         }
     }
 }
 
 
+void web_content_notify_parsing_start(void) {
+
+    if(sWebContentHandlers) {
+        if(sWebContentHandlers->mParsingStart) {
+            sWebContentHandlers->mParsingStart(sWebContentHandlers->mUserData);
+        }
+    }
+}
+
+
+static char web_content_decode_percent(char * inPercent, size_t inLen, size_t * outSkip) {
+
+    uint8_t lCharacter = 0;
+    size_t lCount;
+
+    for(lCount = 0; lCount < 3 && lCount < inLen; lCount++) {
+
+        dbg("Char: %c\r\n", inPercent[lCount]);
+
+        if(inPercent[lCount] >= '0' && inPercent[lCount] <= '9') {
+            lCharacter = (lCharacter << 4) | (inPercent[lCount] - '0');
+        } else if(inPercent[lCount] >= 'a' && inPercent[lCount] <= 'f') {
+            lCharacter = (lCharacter << 4) | (inPercent[lCount] - 'a' + 10);
+        } else if(inPercent[lCount] >= 'A' && inPercent[lCount] <= 'F') {
+            lCharacter = (lCharacter << 4) | (inPercent[lCount] - 'A' + 10);
+        }
+        dbg("HexValue: 0x%02x\r\n", lCharacter);
+    }
+
+    dbg("Increment is: %d\r\n", lCount);
+    dbg("Character is: 0x%02x (%c)\r\n", lCharacter, lCharacter);
+    *outSkip = lCount;
+
+    return lCharacter;
+}
+
+
 bool web_content_parse_url_encoded_data(char * inURLEncodedData, size_t inURLEncodedDataLen) {
 
-    return false;
+    size_t lIncrement = 0;
+    size_t lReadIndex;
+    size_t lWriteIndex;
+
+    size_t lTokenStart = 0;
+    size_t lTokenLen = 0;
+
+    size_t lValueStart = 0;
+    size_t lValueLen = 0;
+
+    te_url_parser_state lState = URL_PARSER_STATE_IDLE;
+
+    /* Read index         v                         */
+    /* Input        abc%20def=dead%20beef&two=three */
+    /* Write index      ^                           */
+    /* Output       abc def=dead beef&two=three     */
+
+    for(lReadIndex = 0, lWriteIndex = 0; lReadIndex < inURLEncodedDataLen; lReadIndex ++, lWriteIndex++) {
+
+        if(inURLEncodedData[lReadIndex] == '%') {
+            inURLEncodedData[lWriteIndex] = web_content_decode_percent(&inURLEncodedData[lReadIndex], inURLEncodedDataLen - lReadIndex, &lIncrement);
+            lReadIndex += lIncrement - 1;   /* don't point to the replaced character */
+        } else {
+            inURLEncodedData[lWriteIndex] = inURLEncodedData[lReadIndex];
+        }
+
+        dbg("Read Index:  %d (%c)\r\n", lReadIndex, inURLEncodedData[lReadIndex]);
+        dbg("Write Index: %d (%c)\r\n", lWriteIndex, inURLEncodedData[lWriteIndex]);
+
+        switch(lState) {
+            case URL_PARSER_STATE_IDLE:
+                if(!isspace((int)inURLEncodedData[lReadIndex])) {        /* skip leading white spaces */
+                    dbg("URL_PARSER_TOKEN\r\n");
+                    lTokenStart = lWriteIndex;
+                    lState = URL_PARSER_TOKEN;
+                }
+                break;
+            case URL_PARSER_TOKEN:
+                if(inURLEncodedData[lReadIndex] == '=') {
+                    dbg("URL_PARSER_START_VALUE\r\n");
+                    lTokenLen = lWriteIndex - lTokenStart;
+                    lState = URL_PARSER_START_VALUE;
+                }
+                break;
+            case URL_PARSER_START_VALUE:
+                dbg("URL_PARSER_VALUE\r\n");
+                lValueStart = lWriteIndex;
+                lState = URL_PARSER_VALUE;
+                break;
+            case URL_PARSER_VALUE:
+                if(isspace((int)inURLEncodedData[lReadIndex]) ||                /* cr or lf or something like that */
+                   inURLEncodedData[lReadIndex] == '&') {                       /* next token */
+
+                    dbg("URL_PARSER_STATE_IDLE\r\n");
+                    lValueLen = lWriteIndex - lValueStart;
+
+                    /* process token */
+                    web_gontent_set_token_value(&inURLEncodedData[lTokenStart], lTokenLen, &inURLEncodedData[lValueStart], lValueLen);
+
+                    lState = URL_PARSER_STATE_IDLE;
+                }
+                break;
+        }
+    }
+
+    if(lState == URL_PARSER_VALUE) {
+
+        /* process last token */
+        lValueLen = lWriteIndex - lValueStart;
+
+        web_gontent_set_token_value(&inURLEncodedData[lTokenStart], lTokenLen, &inURLEncodedData[lValueStart], lValueLen);
+    }
+
+    return true;
 }
 
 /* eof */

@@ -749,7 +749,7 @@ void esp8266_task(void * inParameters) {
     }
 }
 
-bool esp8266_http_test_web_content_get_ver(char * outBuffer, size_t inBufferSize, size_t * outBufferLen) {
+bool esp8266_http_test_web_content_get_ver(void * inUserData, char * outBuffer, size_t inBufferSize, size_t * outBufferLen) {
 
     printf("%s(%d)\r\n", __func__, __LINE__);
 
@@ -758,15 +758,38 @@ bool esp8266_http_test_web_content_get_ver(char * outBuffer, size_t inBufferSize
     return true;
 }
 
+bool esp8266_http_test_web_content_set_var(void * inUserData, const char * const inValue, size_t inValueLength) {
+
+    char lBuffer[16];
+    size_t lCopyLen = (inValueLength > sizeof(lBuffer)-1)? (sizeof(lBuffer) - 1) : inValueLength;
+
+    memcpy(lBuffer, inValue, lCopyLen);
+    lBuffer[lCopyLen] = '\0';
+
+    printf("%s(%d): \"%s\"\r\n", __func__, __LINE__, lBuffer);
+
+    return true;
+}
+
+void esp8266_http_test_web_content_start_parse(void * inUserData) {
+    printf("%s(%d)\r\n", __func__, __LINE__);
+}
+
+void esp8266_http_test_web_content_done_parse(void * inUserData) {
+    printf("%s(%d)\r\n", __func__, __LINE__);
+}
+
 static const ts_web_content_handlers sTestWebContent = {
 
     .mHandlerCount = 1,
-    .mParsingDone = NULL,
+    .mParsingStart = esp8266_http_test_web_content_start_parse,
+    .mParsingDone  = esp8266_http_test_web_content_done_parse,
+    .mUserData = NULL,
     .mHandler = {
         {
             .mToken = "ver",
             .mGet = esp8266_http_test_web_content_get_ver,
-            .mSet = NULL,
+            .mSet = esp8266_http_test_web_content_set_var,
         }
     }
 };
