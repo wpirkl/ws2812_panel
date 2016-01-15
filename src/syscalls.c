@@ -1,4 +1,8 @@
 #include <sys/stat.h>
+
+#include "FreeRTOS.h"
+#include "task.h"
+
 #include "stm32f4xx.h"
 #include "stm32f4xx_conf.h"
 #include "usbd_cdc_vcp.h"
@@ -70,4 +74,14 @@ caddr_t _sbrk_r (struct _reent *r, int incr) {
 int _write(int file, char *ptr, int len) {
 	VCP_send_buffer((uint8_t*)ptr, len);
 	return len;
+}
+
+void __malloc_lock ( void * r ) {
+
+    vTaskSuspendAll();
+}
+
+void __malloc_unlock( void * r) {
+
+    xTaskResumeAll();
 }

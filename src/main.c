@@ -41,6 +41,43 @@ __ALIGN_BEGIN USB_OTG_CORE_HANDLE  USB_OTG_dev __ALIGN_END;
 
 void init();
 
+void vApplicationStackOverflowHook( TaskHandle_t xTask, signed char *pcTaskName) {
+
+    printf("%s(%d): Stack overflow on task %p \"%s\"!\r\n", __FILE__, __LINE__, xTask, pcTaskName);
+}
+
+void vApplicationMallocFailedHook( void ) {
+    printf("%s(%d): Malloc failed active task: %p\r\n", __FILE__, __LINE__, xTaskGetCurrentTaskHandle());
+}
+
+void HardFault_Handler( void ) __attribute__( ( naked ) );
+void HardFault_Handler(void) {
+
+    __asm volatile (
+        "    movs r0,#4       \n"
+        "    movs r1, lr      \n"
+        "    tst r0, r1       \n"
+        "    beq _MSP         \n"
+        "    mrs r0, psp      \n"
+        "    b _HALT          \n"
+        "_MSP:                \n"
+        "    mrs r0, msp      \n"
+        "_HALT:               \n"
+        "    ldr r1,[r0,#20]  \n"
+        "    bkpt #0          \n");
+}
+
+void BusFault_Handler(void) {
+
+    printf("%s(%d): Bus Fault\r\n", __FILE__, __LINE__);
+}
+
+void UsageFault_Handler(void) {
+
+    printf("%s(%d): Usage Fault\r\n", __FILE__, __LINE__);
+}
+
+
 void led_task(void * inParameters) {
 
     /* Initialize LEDs */
@@ -239,7 +276,7 @@ void esp8266_test_task(void * inParameters) {
     }
 }
 
-void esp8266_server_handler_task(ts_esp8266_socket * inSocket) {
+void esp8266_test_server_handler_task(ts_esp8266_socket * inSocket) {
 
     uint8_t lBuffer[128];
     size_t lRcvLen;
@@ -691,7 +728,7 @@ void esp8266_task(void * inParameters) {
 
         {   /* Test TCP Server */
             printf("Starting Echo server on port 23... ");
-            if(esp8266_cmd_cipserver(23, esp8266_server_handler_task, configMAX_PRIORITIES - 3)) {
+            if(esp8266_cmd_cipserver(23, esp8266_test_server_handler_task, configMAX_PRIORITIES - 3, configMINIMAL_STACK_SIZE * 4)) {
                 printf("Success!\r\n");
             } else {
                 printf("Failed!\r\n");
@@ -806,9 +843,9 @@ void esp8266_http_test(void * inParameters) {
     printf("done\r\n");
 
     /* create rx task */
-    lRetVal = xTaskCreate(esp8266_rx_task, ( const char * )"esp8266_rx", configMINIMAL_STACK_SIZE * 4, NULL, configMAX_PRIORITIES - 2, &xHandle);
+    lRetVal = xTaskCreate(esp8266_rx_task, ( const char * )"esp8266_rx", configMINIMAL_STACK_SIZE * 6, NULL, configMAX_PRIORITIES - 2, &xHandle);
     if(lRetVal) {
-        printf("Successfully started RX Task\r\n");
+        printf("Successfully started RX Task %p\r\n", xHandle);
     } else {
         printf("Failed starting RX Task\r\n");
     }
@@ -1070,7 +1107,7 @@ int main(void) {
     setbuf(stdout, NULL);
 
     {   /* create tasks */
-        xTaskCreate(led_task,          ( const char * )"led",          configMINIMAL_STACK_SIZE *  8, NULL, configMAX_PRIORITIES - 1, NULL);
+//        xTaskCreate(led_task,          ( const char * )"led",          configMINIMAL_STACK_SIZE *  8, NULL, configMAX_PRIORITIES - 1, NULL);
 //        xTaskCreate(esp8266_mqtt_task, ( const char * )"esp8266_mqtt", configMINIMAL_STACK_SIZE * 32, NULL, configMAX_PRIORITIES - 2, NULL);
         xTaskCreate(esp8266_http_test, ( const char * )"http",         configMINIMAL_STACK_SIZE * 32, NULL, configMAX_PRIORITIES - 2, NULL);
 //        xTaskCreate(esp8266_task,      ( const char * )"esp8266",    configMINIMAL_STACK_SIZE * 32, NULL, configMAX_PRIORITIES - 2, NULL);

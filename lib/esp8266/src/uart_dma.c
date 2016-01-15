@@ -24,7 +24,8 @@
 
 #include "uart_dma.h"
 
-#define USART2_RX_BUFFER_LEN        (4096)
+#define USART2_TX_BUFFER_LEN        (1024)
+#define USART2_RX_BUFFER_LEN        (8192)
 
 #define USART_DMA_FREERTOS
 
@@ -33,10 +34,21 @@
 
 #define dbg dbg_off
 
+#define dbg_err_on(x...)      printf(x)
+#define dbg_err_off(x...)
+
+#define dbg_err dbg_err_on
+
 #if defined(USART_DMA_FREERTOS)
 #include "FreeRTOS.h"
 #include "semphr.h"
 #endif /* USART_DMA_FREERTOS */
+
+
+/* WEP for testing */
+// #undef portMAX_DELAY
+// #define portMAX_DELAY (10000 / portTICK_PERIOD_MS)
+
 
 static uint16_t sUsart2RxBuffer[USART2_RX_BUFFER_LEN];
 static size_t   sUsart2RxTail;
@@ -108,10 +120,14 @@ void usart_dma_open(void) {
 
 #if defined(USART_DMA_FREERTOS)
     sUsart2RxSemaphore = xSemaphoreCreateCounting(1, 0);
-    assert_param(sUsart2RxSemaphore != NULL);
+    if(!sUsart2RxSemaphore) {
+        dbg_err("%s(%d): Semaphore create failed!\r\n", __FILE__, __LINE__);
+    }
 
     sUsart2TxSemaphore = xSemaphoreCreateCounting(1, 0);
-    assert_param(sUsart2TxSemaphore != NULL);
+    if(!sUsart2TxSemaphore) {
+        dbg_err("%s(%d): Semaphore create failed!\r\n", __FILE__, __LINE__);
+    }
 #endif
 
     /* enable UART Interrupt */
@@ -191,6 +207,25 @@ size_t usart_dma_read(uint8_t * inBuffer, size_t inMaxNumBytes) {
     for(lCount = 0; lCount < lCopy; lCount++) {
         inBuffer[lCount] = sUsart2RxBuffer[sUsart2RxTail];
         sUsart2RxTail = usart_dma_rx_inc_tail(sUsart2RxTail);
+    }
+
+    return lCopy;
+}
+
+size_t usart_dma_read_peek(uint8_t * inBuffer, size_t inMaxNumBytes) {
+
+    size_t lAvailable;
+    size_t lCount;
+    size_t lCopy;
+
+    size_t lTail = sUsart2RxTail;
+
+    lAvailable = usart_dma_rx_num();
+    lCopy = ((lAvailable < inMaxNumBytes)? lAvailable : inMaxNumBytes);
+
+    for(lCount = 0; lCount < lCopy; lCount++) {
+        inBuffer[lCount] = sUsart2RxBuffer[lTail];
+        lTail = usart_dma_rx_inc_tail(lTail);
     }
 
     return lCopy;
@@ -303,7 +338,7 @@ bool usart_dma_peek_end(const uint8_t * inString, size_t inStringLength) {
     return true;
 }
 
-size_t usart_dma_match(const uint8_t * inString, size_t inStringLength) {
+bool usart_dma_match(const uint8_t * inString, size_t inStringLength, size_t * outLen) {
 
     size_t lAvailable;
     size_t lTail;
@@ -315,7 +350,7 @@ size_t usart_dma_match(const uint8_t * inString, size_t inStringLength) {
     lAvailable = usart_dma_rx_num();
 
     if(lAvailable < inStringLength) {
-        return 0;
+        return false;
     }
 
     lTail = sUsart2RxTail;
@@ -336,11 +371,12 @@ size_t usart_dma_match(const uint8_t * inString, size_t inStringLength) {
         }
 
         if(lFound) {
-            return lCount + inStringLength;
+            *outLen = lCount + inStringLength;
+            return true;
         }
     }
 
-    return 0;
+    return false;
 }
 
 void usart_dma_rx_skip(size_t inNumberOfCharacters) {
@@ -372,7 +408,7 @@ void   usart_dma_rx_clear(void) {
 }
 
 /*! Buffer storing dma data in TX direction. This is neccessary, as USART Data register only digests 16 or 32 bit accesses */
-static uint16_t sUsart2TxBuffer[USART2_RX_BUFFER_LEN];
+static uint16_t sUsart2TxBuffer[USART2_TX_BUFFER_LEN];
 
 /*! Structure which is filled on each write */
 static DMA_InitTypeDef sDMA_InitStructureTx = {
@@ -402,7 +438,7 @@ size_t usart_dma_write(const uint8_t * const inBuffer, size_t inNumBytes) {
 
     for(lStartIndex = 0; lStartIndex < inNumBytes; lStartIndex += lSendSize) {
 
-        lSendSize = (inNumBytes - lStartIndex > USART2_RX_BUFFER_LEN)? USART2_RX_BUFFER_LEN : (inNumBytes - lStartIndex);
+        lSendSize = (inNumBytes - lStartIndex > USART2_TX_BUFFER_LEN)? USART2_TX_BUFFER_LEN : (inNumBytes - lStartIndex);
 
         /* copy data to buffer */
         for(lCount = 0, lCount1 = lStartIndex; lCount < lSendSize; lCount++, lCount1++) {
@@ -420,7 +456,9 @@ size_t usart_dma_write(const uint8_t * const inBuffer, size_t inNumBytes) {
 
 #if defined(USART_DMA_FREERTOS)
         /* wait on semaphore */
-        xSemaphoreTake(sUsart2TxSemaphore, portMAX_DELAY);
+        if(!xSemaphoreTake(sUsart2TxSemaphore, portMAX_DELAY)) {
+            dbg_err("%s(%d): Semaphore timeout\r\n", __FILE__, __LINE__);
+        }
 #else
         while(!DMA_GetFlagStatus(DMA1_Stream6, DMA_FLAG_TCIF6));
         DMA_ClearFlag(DMA1_Stream6, DMA_FLAG_TCIF6);
@@ -444,13 +482,13 @@ size_t usart_dma_write(const uint8_t * const inBuffer, size_t inNumBytes) {
 #endif
 }
 
-void usart_dma_rx_wait(void) {
+bool usart_dma_rx_wait(void) {
+
+    dbg("%s(%d): Semaphore is: %p\r\n", __FILE__, __LINE__, sUsart2RxSemaphore);
 
     /* wait on semaphore */
-    xSemaphoreTake(sUsart2RxSemaphore, portMAX_DELAY);
+    return xSemaphoreTake(sUsart2RxSemaphore, portMAX_DELAY);
 }
-
-
 
 /*! Usart2 interrupt handler */
 void USART2_IRQHandler(void) {

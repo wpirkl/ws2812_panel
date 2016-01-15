@@ -262,7 +262,15 @@ bool web_content_prepare_output(const ts_web_content_file * inWebContent, char *
 
     te_web_content_type lContentType = web_content_get_enum(inWebContent);
     if(lContentType != MIME_HTML) {
+
+        size_t lCopySize;
+
         dbg("Don't parse MIME Type: \"%s\"\r\n", sWebContentType[lContentType].mType);
+
+        lCopySize = (inOutWebContentSize < inWebContent->mFileLength)? inOutWebContentSize : inWebContent->mFileLength;
+        memcpy(outWebContent, inWebContent->mFile, lCopySize);
+        *outWebContentLen = lCopySize;
+
         return true;
     }
 

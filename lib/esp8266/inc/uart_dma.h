@@ -31,6 +31,18 @@ size_t usart_dma_rx_num(void);
 size_t usart_dma_read(uint8_t * inBuffer, size_t inMaxNumBytes);
 
 
+/*! Get a number of bytes from the rx buffer without removing them
+
+    This function is nonblocking. It will return 0 if nothing's received
+
+    \param[in]  inBuffer
+    \param[in]  inMaxNumBytes
+
+    \retval     The number of bytes read
+*/
+size_t usart_dma_read_peek(uint8_t * inBuffer, size_t inMaxNumBytes);
+
+
 /*!
     Get a number of bytes from the rx buffer until a certain character or end of buffer
 
@@ -88,11 +100,12 @@ bool usart_dma_peek_end(const uint8_t * inString, size_t inStringLength);
 
     \param[in]  inString        The character sequence to compare
     \param[in]  inStringLength  The length of the character sequence to match
+    \param[out] outLen          The index of the first character after inString
 
-    \retval     0   string not found
-    \retval     >0  Length to retreive including inString
+    \retval     true    Found string
+    \retval     false   Did not find string
 */
-size_t usart_dma_match(const uint8_t * inString, size_t inStringLength);
+bool usart_dma_match(const uint8_t * inString, size_t inStringLength, size_t * outLen);
 
 
 /*!
@@ -131,7 +144,7 @@ void usart_dma_rx_clear(void);
 /*!
     Wait until a character arrived
 */
-void usart_dma_rx_wait(void);
+bool usart_dma_rx_wait(void);
 
 
 #endif /* UART_DMA_H_ */

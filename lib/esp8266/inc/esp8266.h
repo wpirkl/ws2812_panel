@@ -342,13 +342,14 @@ bool esp8266_cmd_cipsend_tcp(ts_esp8266_socket * inSocket, uint8_t * inBuffer, s
 
 /*! Create TCP server
 
-    \param[in]  inPort          The port to listen on
-    \param[in]  inServerHandler Handles incoming connections. This function will be spawned like a task
+    \param[in]  inPort                  The port to listen on
+    \param[in]  inServerHandler         Handles incoming connections. This function will be spawned like a task
+    \param[in]  inServerTaskStackSize   The stack size of the server task
 
     \retval true    Successful completion
     \retval false   Failed
 */
-bool esp8266_cmd_cipserver(uint16_t inPort, t_esp8266_server_handler inServerHandler, uint32_t inServerTaskPriority);
+bool esp8266_cmd_cipserver(uint16_t inPort, t_esp8266_server_handler inServerHandler, uint32_t inServerTaskPriority, uint32_t inServerTaskStackSize);
 
 
 

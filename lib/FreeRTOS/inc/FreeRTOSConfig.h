@@ -94,7 +94,7 @@ extern uint32_t SystemCoreClock;
 #define configTICK_RATE_HZ						( ( TickType_t ) 1000 )
 #define configMAX_PRIORITIES					( 5 )
 #define configMINIMAL_STACK_SIZE				( ( unsigned short ) 128 )
-#define configTOTAL_HEAP_SIZE					( ( size_t ) ( 56 * 1024 ) )
+#define configTOTAL_HEAP_SIZE					( ( size_t ) ( 64 * 1024 ) )
 #define configAPPLICATION_ALLOCATED_HEAP		1
 #define configMAX_TASK_NAME_LEN					( 16 )
 #define configUSE_16_BIT_TICKS					0
@@ -114,8 +114,8 @@ extern uint32_t SystemCoreClock;
 /* Hook function related definitions */
 #define configUSE_IDLE_HOOK						0
 #define configUSE_TICK_HOOK						0
-#define configCHECK_FOR_STACK_OVERFLOW			0
-#define configUSE_MALLOC_FAILED_HOOK            0
+#define configCHECK_FOR_STACK_OVERFLOW			2
+#define configUSE_MALLOC_FAILED_HOOK            1
 
 /* Run time and task stats gathering related definitions. */
 #define configGENERATE_RUN_TIME_STATS			0

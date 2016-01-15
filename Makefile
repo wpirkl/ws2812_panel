@@ -87,6 +87,9 @@ $(OUTPATH)/$(PROJ_NAME).hex: $(OUTPATH)/$(PROJ_NAME).elf
 $(OUTPATH)/$(PROJ_NAME).bin: $(OUTPATH)/$(PROJ_NAME).elf
 	$(OBJCOPY) -O binary $< $@
 
+$(OUTPATH)/$(PROJ_NAME).dump: $(OUTPATH)/$(PROJ_NAME).elf
+	$(OBJDUMP) -D $< $@
+
 cleanlib:
 	$(foreach lib,$(LIBS),$(MAKE) clean -C $(LIBPATH_$(lib));)
 
