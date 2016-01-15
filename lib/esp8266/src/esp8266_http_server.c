@@ -23,6 +23,11 @@
 
 #define dbg dbg_off
 
+#define dbg_err_on(x...)      printf(x)
+#define dbg_err_off(x...)
+
+#define dbg_err dbg_err_on
+
 #define HTTP_HEADER_SIZE    (1024)
 
 #define HTTP_BODY_SIZE      (8192)
@@ -132,8 +137,6 @@ bool esp8266_http_server_start(void) {
     return esp8266_cmd_cipserver(80, esp8266_http_server_handler_task, configMAX_PRIORITIES - 3, configMINIMAL_STACK_SIZE * 6);
 }
 
-#undef dbg
-#define dbg dbg_off
 
 /*! Server Handler Task
 */
@@ -181,9 +184,6 @@ static void esp8266_http_server_handler_task(ts_esp8266_socket * inSocket) {
 
     dbg("Closing socket %p\r\n", inSocket);
 }
-
-#undef dbg
-#define dbg dbg_off
 
 
 /*! HTTP Commands */
@@ -331,36 +331,6 @@ static bool esp8266_http_get_header_field(ts_http_server * inHttpServer, uint8_t
 }
 
 
-/*! Get End of Header
-
-    \param[in]  inHttpServer        HTTP Server context
-    \param[out] outEndOfHeaderIdx   Returns the index of the end of the header (beginning of data)
-
-    \retval true    End of header found
-    \retval false   End of header was not found
-*/
-static bool esp8266_http_end_of_header(ts_http_server * inHttpServer, size_t * outEndOfHeaderIdx) {
-
-    size_t lCount = inHttpServer->mParseIndex;
-
-    size_t lLineSize;
-
-    for(;lCount < inHttpServer->mHeaderSize;) {
-
-        lLineSize = esp8266_http_parse_next_line(inHttpServer, lCount) - lCount;
-        if(lLineSize == 2) {    /* end of header */
-            *outEndOfHeaderIdx = lCount + lLineSize;
-            return true;
-        } else {
-            lCount += lLineSize;
-        }
-    }
-
-    /* end of header was not found! */
-    return false;
-}
-
-
 /*! Parse URL
 */
 static void esp8266_http_parse_url(ts_http_server * inHttpServer) {
@@ -377,8 +347,6 @@ static void esp8266_http_parse_url(ts_http_server * inHttpServer) {
     }
 }
 
-#undef dbg
-#define dbg dbg_off
 
 /*! Send Reply
 
@@ -461,8 +429,62 @@ static bool esp8266_http_send_reply(ts_http_server * inHttpServer, const ts_web_
     return (inReply == HTTP_REPLY_OK);
 }
 
-#undef dbg
-#define dbg dbg_off
+
+/*! Read http body
+    \param[in]  inHttpServer    HTTP context
+*/
+static bool esp8266_http_read_body(ts_http_server * inHttpServer) {
+
+    const char lHeaderFieldContentLengthName[] = "Content-Length";
+    uint8_t *  lHeaderFieldContentLengthValue;
+    size_t     lHeaderFieldContentLengthValueLen;
+
+    size_t     lBodyLength;
+
+    char lChar;
+
+    bool lRetVal;
+    size_t lRcvCount = 0;
+    size_t lRetryCount;
+
+    if(esp8266_http_get_header_field(inHttpServer, (uint8_t*)lHeaderFieldContentLengthName, sizeof(lHeaderFieldContentLengthName)-1, &lHeaderFieldContentLengthValue, &lHeaderFieldContentLengthValueLen)) {
+
+        /* get the length of the body */
+        lChar = lHeaderFieldContentLengthValue[lHeaderFieldContentLengthValueLen];
+        lHeaderFieldContentLengthValue[lHeaderFieldContentLengthValueLen] = '\0';
+
+        lBodyLength = strtoul(lHeaderFieldContentLengthValue, NULL, 0);
+
+        lHeaderFieldContentLengthValue[lHeaderFieldContentLengthValueLen] = lChar;
+
+        dbg("Body length is: %d\r\n", lBodyLength);
+        inHttpServer->mBodySize = 0;
+
+        /* make sure we don't read more than the buffer can digest! */
+
+        for(lRetryCount = 0; inHttpServer->mBodySize < lBodyLength && lRetryCount < 4; inHttpServer->mBodySize += lRcvCount, lRetryCount++) {
+
+            lRcvCount = 0;
+            lRetVal = esp8266_receive(inHttpServer->mSocket, &inHttpServer->mBody[inHttpServer->mBodySize], lBodyLength - inHttpServer->mBodySize, &lRcvCount);
+            if(!lRetVal) {
+                dbg_err("%s(%d): Receive failed\r\n", __FILE__, __LINE__);
+                return lRetVal;
+            }
+        }
+
+        if(inHttpServer->mBodySize < lBodyLength) {
+            dbg_err("%s(%d): did not read enough data! Expected: %d, read: %d\r\n", __FILE__, __LINE__, lBodyLength, inHttpServer->mBodySize);
+        }
+
+        return true;
+
+    } else {
+        dbg_err("%s(%d): Missing header field \"%s\"\r\n", __FILE__, __LINE__, lHeaderFieldContentLengthName);
+    }
+
+    return false;
+}
+
 
 /*! Parse http header
 
@@ -594,7 +616,7 @@ static bool esp8266_http_parse(ts_http_server * inHttpServer) {
             /* parse url, there could be url encoded data */
             return esp8266_http_handle_get(inHttpServer);
         case ECMD_POST:
-//            return esp8266_http_handle_post(inHttpServer);
+            return esp8266_http_handle_post(inHttpServer);
         case ECMD_HEAD:
         case ECMD_PUT:
         case ECMD_DELETE:
@@ -613,8 +635,6 @@ static bool esp8266_http_parse(ts_http_server * inHttpServer) {
     }
 }
 
-#undef dbg
-#define dbg dbg_off
 
 /*! HTTP GET - Get URL encoded data
 
@@ -660,8 +680,6 @@ static bool esp8266_http_get_get_url_encoded_data(ts_http_server * inHttpServer)
     return false;
 }
 
-#undef dbg
-#define dbg dbg_off
 
 /*! Handle GET
 
@@ -721,44 +739,43 @@ static bool esp8266_http_handle_get(ts_http_server * inHttpServer) {
     return esp8266_http_send_reply(inHttpServer, lContent, lReply);
 }
 
-#undef dbg
-#define dbg dbg_off
 
-/*! HTTP PUT - Get URL encoded data
+/*! HTTP POST - Get URL encoded data
 
     \param[in]  inHttpServer            HTTP context
 
     \retval true    URL encoded data found
     \retval false   No data found
 */
-static bool esp8266_http_put_get_url_encoded_data(ts_http_server * inHttpServer) {
-
-    size_t lEndOfHeader = 0;
+static bool esp8266_http_post_get_url_encoded_data(ts_http_server * inHttpServer) {
 
     const char lHeaderFieldContentTypeName[] = "Content-Type";
     const char lHeaderFieldContentTypeURLEncoded[] = "application/x-www-form-urlencoded";
-    uint8_t * lHeaderFieldContentTypeValue;
-    size_t lHeaderFieldContentTypeValueLen;
+    uint8_t *  lHeaderFieldContentTypeValue;
+    size_t     lHeaderFieldContentTypeValueLen;
 
 //    "application/x-www-form-urlencoded"
 
-    if(esp8266_http_get_header_field(inHttpServer, lHeaderFieldContentTypeName, sizeof(lHeaderFieldContentTypeName)-1, &lHeaderFieldContentTypeValue, &lHeaderFieldContentTypeValueLen)) {
+    if(esp8266_http_get_header_field(inHttpServer, (uint8_t*)lHeaderFieldContentTypeName, sizeof(lHeaderFieldContentTypeName)-1, &lHeaderFieldContentTypeValue, &lHeaderFieldContentTypeValueLen)) {
         /* header field is present */
 
         /* just for debug */
+        uint8_t lChar;
+
+        lChar = lHeaderFieldContentTypeValue[lHeaderFieldContentTypeValueLen];
         lHeaderFieldContentTypeValue[lHeaderFieldContentTypeValueLen] = '\0';
         dbg("Header Field Value is: \"%s\"\r\n", lHeaderFieldContentTypeValue);
+        lHeaderFieldContentTypeValue[lHeaderFieldContentTypeValueLen] = lChar;
 
         if(sizeof(lHeaderFieldContentTypeURLEncoded)-1 == lHeaderFieldContentTypeValueLen && memcmp(lHeaderFieldContentTypeURLEncoded, lHeaderFieldContentTypeValue, lHeaderFieldContentTypeValueLen) == 0) {
-            /* it's url encoded */
-            esp8266_http_end_of_header(inHttpServer, &lEndOfHeader);
 
             /* just for debug */
-            inHttpServer->mHeader[inHttpServer->mHeaderSize] = '\0';
-            dbg("Post Data:\r\n\"%s\"\r\n", &inHttpServer->mHeader[lEndOfHeader]);
+            inHttpServer->mBody[inHttpServer->mBodySize] = '\0';
+            dbg("Post Data Length: %d\r\n", inHttpServer->mBodySize);
+            dbg("Post Data:\r\n\"%s\"\r\n", inHttpServer->mBody);
 
-            inHttpServer->mURLEncodedData    = &inHttpServer->mHeader[lEndOfHeader];
-            inHttpServer->mURLEncodedDataLen = inHttpServer->mHeaderSize - lEndOfHeader;
+            inHttpServer->mURLEncodedData    = inHttpServer->mBody;
+            inHttpServer->mURLEncodedDataLen = inHttpServer->mBodySize;
             return true;
         } else {
             dbg("Did not match\r\n");
@@ -783,15 +800,25 @@ static bool esp8266_http_handle_post(ts_http_server * inHttpServer) {
     /* parse url */
     esp8266_http_parse_url(inHttpServer);
 
-    if(esp8266_http_put_get_url_encoded_data(inHttpServer)) {
-        /* notify parsing start */
-        web_content_notify_parsing_start();
+    /* read body */
+    if(esp8266_http_read_body(inHttpServer)) {
 
-        /* process url encoded data */
-        web_content_parse_url_encoded_data((char*)inHttpServer->mURLEncodedData, inHttpServer->mURLEncodedDataLen);
+        if(esp8266_http_post_get_url_encoded_data(inHttpServer)) {
 
-        /* notify parsing done */
-        web_content_notify_parsing_done();
+            /* notify parsing start */
+            web_content_notify_parsing_start();
+
+            /* process url encoded data */
+            web_content_parse_url_encoded_data((char*)inHttpServer->mURLEncodedData, inHttpServer->mURLEncodedDataLen);
+
+            /* notify parsing done */
+            web_content_notify_parsing_done();
+        } else {
+            dbg("%s(%d): Some other content type\r\n", __FILE__, __LINE__);
+        }
+
+    } else {
+        dbg("%s(%d): no body present\r\n", __FILE__, __LINE__);
     }
 
     /* just for debug */
