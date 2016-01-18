@@ -5,6 +5,20 @@
 <link rel="stylesheet" href="http://maxcdn.bootstrapcdn.com/bootstrap/3.3.5/css/bootstrap.min.css">
 <script src="https://ajax.googleapis.com/ajax/libs/jquery/1.11.3/jquery.min.js"></script>
 <script src="http://maxcdn.bootstrapcdn.com/bootstrap/3.3.5/js/bootstrap.min.js"></script>
+<script>
+function updateContent() {
+	$.getJSON( "status.json", function( data ) {
+		$.each( data, function( key, val ) {
+			$("#" + key).text(val);
+		});
+	});
+	setTimeout(updateContent, 1000);
+}
+
+$(document).ready(function(){
+	setTimeout(updateContent, 1000);
+});
+</script>
 <title>WS2812 panel control</title>
 </head>
 <body>
@@ -19,18 +33,17 @@
 			</div>
 			<div id="status" class="panel-collapse collapse in">
 				<div id="status_content" class="panel-body">
-					<div>This is the content of the status page</div>
 					<div class="row">
-						<div class="col-sm-3">Item1</div>
-						<div class="col-sm-9">Text1</div>
+						<label class="col-sm-3" for="status_version">Version:</label>
+						<div class="col-sm-9" id="status_version"><!-- ver --></div>
 					</div>
 					<div class="row">
-						<div class="col-sm-3">Item2</div>
-						<div class="col-sm-9">Text2</div>
+						<label class="col-sm-3" for="status_ssid">SSID</label>
+						<div class="col-sm-9" id="status_ssid">Text2</div>
 					</div>
 					<div class="row">
-						<div class="col-sm-3">Item3</div>
-						<div class="col-sm-9">Text3</div>
+						<label class="col-sm-3" for="counter">Counter</label>
+						<div class="col-sm-9" id="counter">Text3</div>
 					</div>
 				</div>
 			</div>

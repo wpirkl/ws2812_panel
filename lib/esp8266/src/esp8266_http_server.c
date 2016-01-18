@@ -106,7 +106,8 @@ typedef enum {
     HTTP_REPLY_OK,
     HTTP_REPLY_NOT_FOUND,
     HTTP_REPLY_INTERNAL_SERVER_ERROR,
-    HTTP_REPLY_NOT_IMPLEMENTED,
+    HTTP_REPLY_NO_CONTENT,
+//    HTTP_REPLY_NOT_IMPLEMENTED,
 } te_html_reply;
 
 /*! defines a http reply */
@@ -205,6 +206,7 @@ static const ts_html_reply sReturnCodes[] = {
     { HTTP_REPLY_OK,                    "OK",                    200 },
     { HTTP_REPLY_NOT_FOUND,             "Not Found",             404 },
     { HTTP_REPLY_INTERNAL_SERVER_ERROR, "Internal Server Error", 500 },
+    { HTTP_REPLY_NO_CONTENT,            "No Content",            204 },
 //    { HTTP_REPLY_NOT_IMPLEMENTED,       "Not Implemented",       501 },
 };
 
@@ -795,7 +797,7 @@ static bool esp8266_http_post_get_url_encoded_data(ts_http_server * inHttpServer
 static bool esp8266_http_handle_post(ts_http_server * inHttpServer) {
 
     const ts_web_content_file * lContent = NULL;
-    te_html_reply lReply = HTTP_REPLY_INTERNAL_SERVER_ERROR;
+    te_html_reply lReply = HTTP_REPLY_NO_CONTENT;
 
     /* parse url */
     esp8266_http_parse_url(inHttpServer);
@@ -821,6 +823,7 @@ static bool esp8266_http_handle_post(ts_http_server * inHttpServer) {
         dbg("%s(%d): no body present\r\n", __FILE__, __LINE__);
     }
 
+#if 0
     /* just for debug */
     inHttpServer->mURL[inHttpServer->mURLLen] = '\0';
     dbg("URL after parse: \"%s\"\r\n", inHttpServer->mURL);
@@ -836,8 +839,9 @@ static bool esp8266_http_handle_post(ts_http_server * inHttpServer) {
         /* get the 404 page */
         web_content_find_file((uint8_t*)"404.html", 8, &lContent);
     }
+#endif
 
-    return esp8266_http_send_reply(inHttpServer, lContent, lReply);
+    return esp8266_http_send_reply(inHttpServer, NULL, lReply);
 }
 
 

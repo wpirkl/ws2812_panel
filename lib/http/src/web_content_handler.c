@@ -23,6 +23,7 @@ typedef enum {
     MIME_GIF,
     MIME_TXT,
     MIME_BIN,
+    MIME_JSON,
     /* ... */
     MIME_LAST,
 } te_web_content_type;
@@ -109,6 +110,7 @@ const ts_web_content_type sWebContentType[] = {
     { "gif",  "image/gif" },
     { "txt",  "text/plain" },
     { "bin",  "application/octet-stream" },
+    { "json", "application/json" },
 //    { "mp3",  "audio/mpeg3" },
 //    { "wav",  "audio/wav" },
 //    { "flac", "audio/ogg" },
@@ -261,7 +263,7 @@ bool web_content_prepare_output(const ts_web_content_file * inWebContent, char *
     te_web_parser_state lState = WEB_PARSER_IDLE;
 
     te_web_content_type lContentType = web_content_get_enum(inWebContent);
-    if(lContentType != MIME_HTML) {
+    if(lContentType != MIME_HTML && lContentType != MIME_JSON) {
 
         size_t lCopySize;
 

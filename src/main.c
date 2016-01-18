@@ -78,6 +78,7 @@ void UsageFault_Handler(void) {
 }
 
 
+
 void led_task(void * inParameters) {
 
     /* Initialize LEDs */
@@ -241,6 +242,7 @@ void led_task(void * inParameters) {
 #endif
 }
 
+
 void esp8266_test_task(void * inParameters) {
 
     uint8_t lBuffer[128];
@@ -275,6 +277,8 @@ void esp8266_test_task(void * inParameters) {
         }
     }
 }
+
+
 
 void esp8266_test_server_handler_task(ts_esp8266_socket * inSocket) {
 
@@ -786,6 +790,72 @@ void esp8266_task(void * inParameters) {
     }
 }
 
+
+/*! HTTP server data */
+typedef struct {
+
+    /*! Mutex which handles data structure access */
+    SemaphoreHandle_t mMutex;
+
+    /*! Indicates if we're holding the mutex */
+    bool        mMutexHolding;
+
+    /*! A counter just for testing */
+    uint32_t    mCounter;
+
+    /*! is SSID updated */
+    size_t      mSSIDLen;
+
+    /*! is Password updated */
+    size_t      mPassLen;
+
+    /*! Buffer for SSID */
+    uint8_t     mSSID[32];
+
+    /*! Buffer for Password */
+    uint8_t     mPass[65];
+
+} ts_myUserData;
+
+static ts_myUserData sUserData = {
+    .mMutexHolding = false,
+    .mCounter = 0,
+    .mSSIDLen = 0,
+    .mPassLen = 0,
+};
+
+bool esp8266_http_test_web_content_get_status_ssid(void * inUserData, char * outBuffer, size_t inBufferSize, size_t * outBufferLen) {
+
+    uint8_t lSSID_retrv[32];
+    size_t  lSSID_retrv_len;
+
+    ts_myUserData * lUserData = (ts_myUserData*)inUserData;
+
+    printf("%s(%d)\r\n", __func__, __LINE__);
+
+    if(esp8266_cmd_get_cwjap_cur(lSSID_retrv, sizeof(lSSID_retrv) - 1, &lSSID_retrv_len)) {
+
+        lSSID_retrv[lSSID_retrv_len] = '\0';
+        *outBufferLen = snprintf(outBuffer, inBufferSize, "%s", lSSID_retrv);
+
+    } else {
+        *outBufferLen = snprintf(outBuffer, inBufferSize, "NONE");
+    }
+
+    return true;
+}
+
+bool esp8266_http_test_web_content_get_counter(void * inUserData, char * outBuffer, size_t inBufferSize, size_t * outBufferLen) {
+
+    ts_myUserData * lUserData = (ts_myUserData*)inUserData;
+
+    printf("%s(%d)\r\n", __func__, __LINE__);
+
+    *outBufferLen = snprintf(outBuffer, inBufferSize, "%d", lUserData->mCounter++);
+
+    return true;
+}
+
 bool esp8266_http_test_web_content_get_ver(void * inUserData, char * outBuffer, size_t inBufferSize, size_t * outBufferLen) {
 
     printf("%s(%d)\r\n", __func__, __LINE__);
@@ -808,25 +878,108 @@ bool esp8266_http_test_web_content_set_var(void * inUserData, const char * const
     return true;
 }
 
-void esp8266_http_test_web_content_start_parse(void * inUserData) {
+bool esp8266_http_test_web_content_set_ssid(void * inUserData, const char * const inValue, size_t inValueLength) {
+
+    ts_myUserData * lUserData = (ts_myUserData*)inUserData;
+
     printf("%s(%d)\r\n", __func__, __LINE__);
+
+    if(lUserData->mMutexHolding) {
+
+        if(inValueLength < sizeof(lUserData->mSSID) -1) {
+
+            memcpy(lUserData->mSSID, inValue, inValueLength);
+            lUserData->mSSIDLen = inValueLength;
+        }
+    }
+
+    return true;
+}
+
+bool esp8266_http_test_web_content_set_password(void * inUserData, const char * const inValue, size_t inValueLength) {
+
+    ts_myUserData * lUserData = (ts_myUserData*)inUserData;
+
+    printf("%s(%d)\r\n", __func__, __LINE__);
+
+    if(lUserData->mMutexHolding) {
+        if(inValueLength < sizeof(lUserData->mPass) - 1) {
+
+            memcpy(lUserData->mPass, inValue, inValueLength);
+            lUserData->mPassLen = inValueLength;
+        }
+    }
+
+    return true;
+}
+
+void esp8266_http_test_web_content_start_parse(void * inUserData) {
+
+    ts_myUserData * lUserData = (ts_myUserData*)inUserData;
+
+    printf("%s(%d)\r\n", __func__, __LINE__);
+
+    lUserData->mMutexHolding = true; // xSemaphoreTakeRecursive(lUserData->mMutex, portMAX_DELAY);
 }
 
 void esp8266_http_test_web_content_done_parse(void * inUserData) {
+
+    ts_myUserData * lUserData = (ts_myUserData*)inUserData;
+
     printf("%s(%d)\r\n", __func__, __LINE__);
+
+//    if(lUserData->mMutexHolding) {
+
+        /* process here */
+        if(lUserData->mSSIDLen > 0 && lUserData->mPassLen > 0) {
+
+            printf("Connecting to AP... ");
+            if(esp8266_cmd_set_cwjap_cur(lUserData->mSSID, lUserData->mSSIDLen, lUserData->mPass, lUserData->mPassLen)) {
+                printf("Success!\r\n");
+            } else {
+                printf("Failed!\r\n");
+            }
+
+            lUserData->mSSIDLen = 0;
+            lUserData->mPassLen = 0;
+        }
+
+        lUserData->mMutexHolding = false;
+//        xSemaphoreGiveRecursive(lUserData->mMutex);
+//    }
 }
 
 static const ts_web_content_handlers sTestWebContent = {
 
-    .mHandlerCount = 1,
+    .mHandlerCount = 5,
     .mParsingStart = esp8266_http_test_web_content_start_parse,
     .mParsingDone  = esp8266_http_test_web_content_done_parse,
-    .mUserData = NULL,
+    .mUserData = (void*)&sUserData,
     .mHandler = {
         {
             .mToken = "ver",
             .mGet = esp8266_http_test_web_content_get_ver,
             .mSet = esp8266_http_test_web_content_set_var,
+        },
+        {
+            .mToken = "counter",
+            .mGet = esp8266_http_test_web_content_get_counter,
+            .mSet = NULL,
+        },
+        {
+            .mToken = "statusssid",
+            .mGet = esp8266_http_test_web_content_get_status_ssid,
+            .mSet = NULL,
+        },
+        {
+            .mToken = "ssid",
+            .mGet = NULL,
+            .mSet = esp8266_http_test_web_content_set_ssid,
+        },
+        {
+            .mToken = "password",
+            .mGet = NULL,
+            .mSet = esp8266_http_test_web_content_set_password,
         }
     }
 };
@@ -837,6 +990,12 @@ void esp8266_http_test(void * inParameters) {
     BaseType_t lRetVal;
 
     vTaskDelay(10000);
+
+    printf("Initialize user data\r\n");
+    sUserData.mMutex = xSemaphoreCreateRecursiveMutex();
+    if(!sUserData.mMutex) {
+        printf("Mutex creation failed!\r\n");
+    }
 
     printf("Initialize ESP8266... ");
     esp8266_init();
@@ -880,13 +1039,27 @@ void esp8266_http_test(void * inParameters) {
     }
 
     {   /* set station mode */
-        printf("Set WIFI Mode to %d... ", ESP8266_WIFI_MODE_AP);
-        if(esp8266_cmd_set_cwmode_cur(ESP8266_WIFI_MODE_AP)) {
+        printf("Set WIFI Mode to %d... ", ESP8266_WIFI_MODE_STA_AP);
+        if(esp8266_cmd_set_cwmode_cur(ESP8266_WIFI_MODE_STA_AP)) {
             printf("Success!\r\n");
         } else {
             printf("Failed!\r\n");
         }
     }
+
+#if 0
+    {   /* Join AP */
+        uint8_t lSSID[] = "AndroidAP";
+        uint8_t lPW[] = "cyvg3835";
+
+        printf("Connecting to AP... ");
+        if(esp8266_cmd_set_cwjap_cur(lSSID, sizeof(lSSID)-1, lPW, sizeof(lPW)-1)) {
+            printf("Success!\r\n");
+        } else {
+            printf("Failed!\r\n");
+        }
+    }
+#endif
 
     {   /* configure AP */
         uint8_t lSSIDBuffer[32];
@@ -922,6 +1095,7 @@ void esp8266_http_test(void * inParameters) {
     /* delete this task */
     vTaskDelete(NULL);
 }
+
 
 /*
 void esp8266_mqtt_message_arrived(MessageData* data) {
