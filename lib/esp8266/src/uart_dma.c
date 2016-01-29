@@ -314,6 +314,34 @@ bool usart_dma_peek(const uint8_t * inString, size_t inStringLength) {
     return true;
 }
 
+bool usart_dma_peek_skip(const uint8_t * inString, size_t inStringLength, size_t inSkipBefore) {
+
+    size_t lAvailable;
+    size_t lTail;
+    size_t lIndex;
+
+    lAvailable = usart_dma_rx_num();
+    lTail = sUsart2RxTail;
+
+    if(lAvailable < inStringLength + inSkipBefore) {
+        return false;
+    }
+
+    /* skip */
+    for(lIndex = 0; lIndex < inSkipBefore; lIndex++, lTail = usart_dma_rx_inc_tail(lTail));
+
+    /* match */
+    for(lIndex = 0; lIndex < inStringLength; lIndex++, lTail = usart_dma_rx_inc_tail(lTail)) {
+
+        /* mismatch */
+        if(inString[lIndex] != (uint8_t)sUsart2RxBuffer[lTail]) {
+            return false;
+        }
+    }
+
+    return true;
+}
+
 bool usart_dma_peek_end(const uint8_t * inString, size_t inStringLength) {
 
     size_t lAvailable;
@@ -488,6 +516,11 @@ bool usart_dma_rx_wait(void) {
 
     /* wait on semaphore */
     return xSemaphoreTake(sUsart2RxSemaphore, portMAX_DELAY);
+}
+
+void usart_dma_rx_force_wakeup(void) {
+
+    xSemaphoreGive(sUsart2RxSemaphore);
 }
 
 /*! Usart2 interrupt handler */

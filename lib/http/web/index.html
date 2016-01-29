@@ -7,12 +7,13 @@
 <script src="http://maxcdn.bootstrapcdn.com/bootstrap/3.3.5/js/bootstrap.min.js"></script>
 <script>
 function updateContent() {
-	$.getJSON( "status.json", function( data ) {
+	var jqxhr = $.getJSON( "status.json", function( data ) {
 		$.each( data, function( key, val ) {
 			$("#" + key).text(val);
 		});
-	});
-	setTimeout(updateContent, 1000);
+		setTimeout(updateContent, 500);
+	})
+
 }
 
 $(document).ready(function(){
@@ -20,7 +21,7 @@ $(document).ready(function(){
 	$("#led").load("led.html #led_content");
 	$("#wifi").load("wifi.html #wifi_content");
 	$("#mqtt").load("mqtt.html #mqtt_content");
-	setTimeout(updateContent, 1000);
+	setTimeout(updateContent, 2000);
 });
 </script>
 <title>WS2812 panel control</title>

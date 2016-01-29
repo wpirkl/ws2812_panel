@@ -410,8 +410,8 @@ static bool esp8266_http_send_reply(ts_http_server * inHttpServer, const ts_web_
 
             for(lSent = 0; lSent < inHttpServer->mBodySize && lStatus; lSent += lChunk) {
 
-                if(inHttpServer->mBodySize - lSent > 1024) {
-                    lChunk = 1024;
+                if(inHttpServer->mBodySize - lSent > 2048) {
+                    lChunk = 2048;
                 } else {
                     lChunk = inHttpServer->mBodySize - lSent;
                 }

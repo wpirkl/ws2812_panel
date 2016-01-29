@@ -82,7 +82,19 @@ size_t usart_dma_read_until_str(uint8_t * inBuffer, size_t inMaxNumBytes, size_t
     \retval     true: if the buffer starts with the string, false if it doesn't
 */
 bool usart_dma_peek(const uint8_t * inString, size_t inStringLength);
- 
+
+
+/*!
+    Check if the buffer starts with a certain pattern but starting from an offset
+
+    \param[in]  inString        The character sequence to compare
+    \param[in]  inStringLength  The length of the character sequence to match
+    \param[in]  inSkipBefore    The offset before the comparison
+
+    \retval     true: if the buffer starts with the string, false if it doesn't
+*/
+bool usart_dma_peek_skip(const uint8_t * inString, size_t inStringLength, size_t inSkipBefore);
+
 
 /*!
     Check if the buffer ends with a certain pattern
@@ -136,16 +148,23 @@ void usart_dma_rx_skip_until(uint8_t inCharacter);
 */
 size_t usart_dma_write(const uint8_t * const inBuffer, size_t inNumBytes);
 
+
 /*!
     Flush all received characters
 */
 void usart_dma_rx_clear(void);
+
 
 /*!
     Wait until a character arrived
 */
 bool usart_dma_rx_wait(void);
 
+
+/*!
+    Forces a wakeup of the rx semaphore
+*/
+void usart_dma_rx_force_wakeup(void);
 
 #endif /* UART_DMA_H_ */
 

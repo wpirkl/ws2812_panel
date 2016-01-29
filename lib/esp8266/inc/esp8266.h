@@ -76,6 +76,14 @@ void esp8266_init(void);
 void esp8266_rx_handler(void);
 
 
+/*! Handle sockets
+
+    This function should be called periodically. Using FreeRTOS, it will use a queue to communicate
+    with esp8266_rx_handler.
+*/
+void esp8266_socket_handler(void);
+
+
 /*! Test if this library works by sending down a mal-formatted command
 
     \note this command should fail

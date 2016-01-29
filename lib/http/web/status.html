@@ -7,12 +7,12 @@
 <script src="http://maxcdn.bootstrapcdn.com/bootstrap/3.3.5/js/bootstrap.min.js"></script>
 <script>
 function updateContent() {
-	$.getJSON( "status.json", function( data ) {
+	var jqxhr = $.getJSON( "status.json", function( data ) {
 		$.each( data, function( key, val ) {
 			$("#" + key).text(val);
 		});
+		setTimeout(updateContent, 1000);
 	});
-	setTimeout(updateContent, 1000);
 }
 
 $(document).ready(function(){
@@ -39,12 +39,15 @@ $(document).ready(function(){
 					</div>
 					<div class="row">
 						<label class="col-sm-3" for="status_ssid">SSID</label>
-						<div class="col-sm-9" id="status_ssid">Text2</div>
+						<div class="col-sm-9" id="status_ssid"><!-- statusssid --></div>
 					</div>
 					<div class="row">
 						<label class="col-sm-3" for="counter">Counter</label>
-						<div class="col-sm-9" id="counter">Text3</div>
+						<div class="col-sm-9" id="counter"><!-- counter --></div>
 					</div>
+					<div class="row">
+						<label class="col-sm-3" for="cpu_load">CPU Load</label>
+						<div class="col-sm-9" id="cpu_load"><!-- cpuload --></div>
 				</div>
 			</div>
 		</div>

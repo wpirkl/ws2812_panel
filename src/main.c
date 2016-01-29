@@ -77,7 +77,27 @@ void UsageFault_Handler(void) {
     printf("%s(%d): Usage Fault\r\n", __FILE__, __LINE__);
 }
 
+static volatile uint32_t s100percentIdle = 0;
+static volatile uint32_t sLoadCounter = 0;
+static volatile uint32_t sCurrentLoad = 0;
 
+void vApplicationIdleHook( void ) {
+
+    sLoadCounter++;
+}
+
+void cpu_load_task(void * inParameters) {
+
+    uint32_t lLastCounter;
+
+    for(;;) {
+
+        sCurrentLoad = sLoadCounter - lLastCounter;
+        lLastCounter = sLoadCounter;
+
+        vTaskDelay(1000);
+    }
+}
 
 void led_task(void * inParameters) {
 
@@ -242,7 +262,6 @@ void led_task(void * inParameters) {
 #endif
 }
 
-
 void esp8266_test_task(void * inParameters) {
 
     uint8_t lBuffer[128];
@@ -278,8 +297,6 @@ void esp8266_test_task(void * inParameters) {
     }
 }
 
-
-
 void esp8266_test_server_handler_task(ts_esp8266_socket * inSocket) {
 
     uint8_t lBuffer[128];
@@ -309,6 +326,13 @@ void esp8266_rx_task(void * inParameters) {
     }
 }
 
+void esp8266_socket_task(void * inParameters) {
+
+    for(;;) {
+        esp8266_socket_handler();
+    }
+}
+
 void esp8266_task(void * inParameters) {
 
     TaskHandle_t xHandle = NULL;
@@ -320,6 +344,14 @@ void esp8266_task(void * inParameters) {
 
     /* create rx task */
     lRetVal = xTaskCreate(esp8266_rx_task, ( const char * )"esp8266_rx", configMINIMAL_STACK_SIZE * 4, NULL, configMAX_PRIORITIES - 2, &xHandle);
+    if(lRetVal) {
+        printf("Successfully started RX Task\r\n");
+    } else {
+        printf("Failed starting RX Task\r\n");
+    }
+
+    /* create socket task */
+    lRetVal = xTaskCreate(esp8266_socket_task, ( const char * )"esp8266_so", configMINIMAL_STACK_SIZE, NULL, configMAX_PRIORITIES - 2, &xHandle);
     if(lRetVal) {
         printf("Successfully started RX Task\r\n");
     } else {
@@ -797,9 +829,6 @@ typedef struct {
     /*! Mutex which handles data structure access */
     SemaphoreHandle_t mMutex;
 
-    /*! Indicates if we're holding the mutex */
-    bool        mMutexHolding;
-
     /*! A counter just for testing */
     uint32_t    mCounter;
 
@@ -818,7 +847,6 @@ typedef struct {
 } ts_myUserData;
 
 static ts_myUserData sUserData = {
-    .mMutexHolding = false,
     .mCounter = 0,
     .mSSIDLen = 0,
     .mPassLen = 0,
@@ -865,6 +893,15 @@ bool esp8266_http_test_web_content_get_ver(void * inUserData, char * outBuffer, 
     return true;
 }
 
+bool esp8266_http_test_web_content_get_cpu(void * inUserData, char * outBuffer, size_t inBufferSize, size_t * outBufferLen) {
+
+    printf("%s(%d)\r\n", __func__, __LINE__);
+
+    *outBufferLen = snprintf(outBuffer, inBufferSize, "%d", 100 - ((100 * sCurrentLoad) / s100percentIdle));
+
+    return true;
+}
+
 bool esp8266_http_test_web_content_set_var(void * inUserData, const char * const inValue, size_t inValueLength) {
 
     char lBuffer[16];
@@ -884,13 +921,10 @@ bool esp8266_http_test_web_content_set_ssid(void * inUserData, const char * cons
 
     printf("%s(%d)\r\n", __func__, __LINE__);
 
-    if(lUserData->mMutexHolding) {
+    if(inValueLength < sizeof(lUserData->mSSID) -1) {
 
-        if(inValueLength < sizeof(lUserData->mSSID) -1) {
-
-            memcpy(lUserData->mSSID, inValue, inValueLength);
-            lUserData->mSSIDLen = inValueLength;
-        }
+        memcpy(lUserData->mSSID, inValue, inValueLength);
+        lUserData->mSSIDLen = inValueLength;
     }
 
     return true;
@@ -902,12 +936,10 @@ bool esp8266_http_test_web_content_set_password(void * inUserData, const char * 
 
     printf("%s(%d)\r\n", __func__, __LINE__);
 
-    if(lUserData->mMutexHolding) {
-        if(inValueLength < sizeof(lUserData->mPass) - 1) {
+    if(inValueLength < sizeof(lUserData->mPass) - 1) {
 
-            memcpy(lUserData->mPass, inValue, inValueLength);
-            lUserData->mPassLen = inValueLength;
-        }
+        memcpy(lUserData->mPass, inValue, inValueLength);
+        lUserData->mPassLen = inValueLength;
     }
 
     return true;
@@ -919,7 +951,7 @@ void esp8266_http_test_web_content_start_parse(void * inUserData) {
 
     printf("%s(%d)\r\n", __func__, __LINE__);
 
-    lUserData->mMutexHolding = true; // xSemaphoreTakeRecursive(lUserData->mMutex, portMAX_DELAY);
+    xSemaphoreTakeRecursive(lUserData->mMutex, portMAX_DELAY);
 }
 
 void esp8266_http_test_web_content_done_parse(void * inUserData) {
@@ -928,30 +960,26 @@ void esp8266_http_test_web_content_done_parse(void * inUserData) {
 
     printf("%s(%d)\r\n", __func__, __LINE__);
 
-//    if(lUserData->mMutexHolding) {
+    /* process here */
+    if(lUserData->mSSIDLen > 0 && lUserData->mPassLen > 0) {
 
-        /* process here */
-        if(lUserData->mSSIDLen > 0 && lUserData->mPassLen > 0) {
-
-            printf("Connecting to AP... ");
-            if(esp8266_cmd_set_cwjap_cur(lUserData->mSSID, lUserData->mSSIDLen, lUserData->mPass, lUserData->mPassLen)) {
-                printf("Success!\r\n");
-            } else {
-                printf("Failed!\r\n");
-            }
-
-            lUserData->mSSIDLen = 0;
-            lUserData->mPassLen = 0;
+        printf("Connecting to AP... ");
+        if(esp8266_cmd_set_cwjap_cur(lUserData->mSSID, lUserData->mSSIDLen, lUserData->mPass, lUserData->mPassLen)) {
+            printf("Success!\r\n");
+        } else {
+            printf("Failed!\r\n");
         }
 
-        lUserData->mMutexHolding = false;
-//        xSemaphoreGiveRecursive(lUserData->mMutex);
-//    }
+        lUserData->mSSIDLen = 0;
+        lUserData->mPassLen = 0;
+    }
+
+    xSemaphoreGiveRecursive(lUserData->mMutex);
 }
 
 static const ts_web_content_handlers sTestWebContent = {
 
-    .mHandlerCount = 5,
+    .mHandlerCount = 6,
     .mParsingStart = esp8266_http_test_web_content_start_parse,
     .mParsingDone  = esp8266_http_test_web_content_done_parse,
     .mUserData = (void*)&sUserData,
@@ -972,6 +1000,11 @@ static const ts_web_content_handlers sTestWebContent = {
             .mSet = NULL,
         },
         {
+            .mToken = "cpuload",
+            .mGet = esp8266_http_test_web_content_get_cpu,
+            .mSet = NULL,
+        },
+        {
             .mToken = "ssid",
             .mGet = NULL,
             .mSet = esp8266_http_test_web_content_set_ssid,
@@ -988,6 +1021,16 @@ void esp8266_http_test(void * inParameters) {
 
     TaskHandle_t xHandle = NULL;
     BaseType_t lRetVal;
+
+    {   /* measure 100 percent idle */
+        uint32_t lBackupCounter;
+
+        lBackupCounter = sLoadCounter;
+        vTaskDelay(1000);
+        s100percentIdle = sLoadCounter - lBackupCounter;
+    }
+
+    xTaskCreate(cpu_load_task, ( const char * )"cpu", configMINIMAL_STACK_SIZE, NULL, configMAX_PRIORITIES - 1, NULL);
 
     vTaskDelay(10000);
 
@@ -1007,6 +1050,14 @@ void esp8266_http_test(void * inParameters) {
         printf("Successfully started RX Task %p\r\n", xHandle);
     } else {
         printf("Failed starting RX Task\r\n");
+    }
+
+    /* create socket task */
+    lRetVal = xTaskCreate(esp8266_socket_task, ( const char * )"esp8266_so", configMINIMAL_STACK_SIZE, NULL, configMAX_PRIORITIES - 2, &xHandle);
+    if(lRetVal) {
+        printf("Successfully started Socket Task %p\r\n", xHandle);
+    } else {
+        printf("Failed starting Socket Task\r\n");
     }
 
     vTaskDelay(1000);
@@ -1039,8 +1090,8 @@ void esp8266_http_test(void * inParameters) {
     }
 
     {   /* set station mode */
-        printf("Set WIFI Mode to %d... ", ESP8266_WIFI_MODE_STA_AP);
-        if(esp8266_cmd_set_cwmode_cur(ESP8266_WIFI_MODE_STA_AP)) {
+        printf("Set WIFI Mode to %d... ", ESP8266_WIFI_MODE_AP /* ESP8266_WIFI_MODE_STA_AP */);
+        if(esp8266_cmd_set_cwmode_cur(ESP8266_WIFI_MODE_AP /* ESP8266_WIFI_MODE_STA_AP */)) {
             printf("Success!\r\n");
         } else {
             printf("Failed!\r\n");
@@ -1145,6 +1196,14 @@ void esp8266_mqtt_task(void * inParameters) {
         printf("Successfully started RX Task\r\n");
     } else {
         printf("Failed starting RX Task\r\n");
+    }
+
+    /* create socket task */
+    lRetVal = xTaskCreate(esp8266_socket_task, ( const char * )"esp8266_so", configMINIMAL_STACK_SIZE, NULL, configMAX_PRIORITIES - 2, &xHandle);
+    if(lRetVal) {
+        printf("Successfully started Socket Task %p\r\n", xHandle);
+    } else {
+        printf("Failed starting Socket Task\r\n");
     }
 
     vTaskDelay(1000);
@@ -1281,12 +1340,11 @@ int main(void) {
     setbuf(stdout, NULL);
 
     {   /* create tasks */
-//        xTaskCreate(led_task,          ( const char * )"led",          configMINIMAL_STACK_SIZE *  8, NULL, configMAX_PRIORITIES - 1, NULL);
-//        xTaskCreate(esp8266_mqtt_task, ( const char * )"esp8266_mqtt", configMINIMAL_STACK_SIZE * 32, NULL, configMAX_PRIORITIES - 2, NULL);
-        xTaskCreate(esp8266_http_test, ( const char * )"http",         configMINIMAL_STACK_SIZE * 32, NULL, configMAX_PRIORITIES - 2, NULL);
-//        xTaskCreate(esp8266_task,      ( const char * )"esp8266",    configMINIMAL_STACK_SIZE * 32, NULL, configMAX_PRIORITIES - 2, NULL);
-//        xTaskCreate(esp8266_test_task, ( const char * )"test",       configMINIMAL_STACK_SIZE * 8, NULL, configMAX_PRIORITIES - 3, NULL);
-
+        xTaskCreate(led_task,          ( const char * )"led",          configMINIMAL_STACK_SIZE *  8, NULL, configMAX_PRIORITIES - 2, NULL);
+//        xTaskCreate(esp8266_mqtt_task, ( const char * )"esp8266_mqtt", configMINIMAL_STACK_SIZE * 32, NULL, configMAX_PRIORITIES - 3, NULL);
+        xTaskCreate(esp8266_http_test, ( const char * )"http",         configMINIMAL_STACK_SIZE * 32, NULL, configMAX_PRIORITIES - 3, NULL);
+//        xTaskCreate(esp8266_task,      ( const char * )"esp8266",    configMINIMAL_STACK_SIZE * 32, NULL, configMAX_PRIORITIES - 3, NULL);
+//        xTaskCreate(esp8266_test_task, ( const char * )"test",       configMINIMAL_STACK_SIZE * 8, NULL, configMAX_PRIORITIES - 4, NULL);
 
         /* Start the scheduler. */
         vTaskStartScheduler();
