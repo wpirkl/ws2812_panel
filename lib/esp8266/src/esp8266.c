@@ -757,7 +757,10 @@ void esp8266_socket_handler(void) {
                     if(sEsp8266.mSockets[lSocketCommand.mSocket].mTaskHandle == NULL) {   /* spawn off the server task */
 
                         BaseType_t lRetVal;
-                        lRetVal = xTaskCreate(esp8266_server_handler_task, ( const char * )"esp8266_sh", configMINIMAL_STACK_SIZE * 10, (void*)lSocketCommand.mSocket, sEsp8266.mServerTaskPriority, &sEsp8266.mSockets[lSocketCommand.mSocket].mTaskHandle);
+                        TaskHandle_t lTaskHandle = NULL;
+
+                        lRetVal = xTaskCreate(esp8266_server_handler_task, ( const char * )"esp8266_sh", configMINIMAL_STACK_SIZE * 10, (void*)lSocketCommand.mSocket, sEsp8266.mServerTaskPriority, &lTaskHandle);
+                        sEsp8266.mSockets[lSocketCommand.mSocket].mTaskHandle = lTaskHandle;    // avoid compiler warning about volatile
                         if(lRetVal) {
                             dbg("%s(%d): successfully created server task %p\r\n", __FILE__, __LINE__, sEsp8266.mSockets[lSocketCommand.mSocket].mTaskHandle);
                         } else {

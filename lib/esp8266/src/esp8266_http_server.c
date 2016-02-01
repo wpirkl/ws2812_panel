@@ -455,7 +455,7 @@ static bool esp8266_http_read_body(ts_http_server * inHttpServer) {
         lChar = lHeaderFieldContentLengthValue[lHeaderFieldContentLengthValueLen];
         lHeaderFieldContentLengthValue[lHeaderFieldContentLengthValueLen] = '\0';
 
-        lBodyLength = strtoul(lHeaderFieldContentLengthValue, NULL, 0);
+        lBodyLength = strtoul((char*)lHeaderFieldContentLengthValue, NULL, 0);
 
         lHeaderFieldContentLengthValue[lHeaderFieldContentLengthValueLen] = lChar;
 
@@ -796,7 +796,6 @@ static bool esp8266_http_post_get_url_encoded_data(ts_http_server * inHttpServer
 */
 static bool esp8266_http_handle_post(ts_http_server * inHttpServer) {
 
-    const ts_web_content_file * lContent = NULL;
     te_html_reply lReply = HTTP_REPLY_NO_CONTENT;
 
     /* parse url */

@@ -67,16 +67,6 @@ void HardFault_Handler(void) {
         "    bkpt #0          \n");
 }
 
-void BusFault_Handler(void) {
-
-    printf("%s(%d): Bus Fault\r\n", __FILE__, __LINE__);
-}
-
-void UsageFault_Handler(void) {
-
-    printf("%s(%d): Usage Fault\r\n", __FILE__, __LINE__);
-}
-
 static volatile uint32_t s100percentIdle = 0;
 static volatile uint32_t sLoadCounter = 0;
 static volatile uint32_t sCurrentLoad = 0;
@@ -92,10 +82,11 @@ void cpu_load_task(void * inParameters) {
 
     for(;;) {
 
-        sCurrentLoad = sLoadCounter - lLastCounter;
         lLastCounter = sLoadCounter;
 
         vTaskDelay(1000);
+
+        sCurrentLoad = sLoadCounter - lLastCounter;
     }
 }
 
@@ -857,7 +848,7 @@ bool esp8266_http_test_web_content_get_status_ssid(void * inUserData, char * out
     uint8_t lSSID_retrv[32];
     size_t  lSSID_retrv_len;
 
-    ts_myUserData * lUserData = (ts_myUserData*)inUserData;
+//    ts_myUserData * lUserData = (ts_myUserData*)inUserData;
 
     printf("%s(%d)\r\n", __func__, __LINE__);
 
@@ -879,7 +870,7 @@ bool esp8266_http_test_web_content_get_counter(void * inUserData, char * outBuff
 
     printf("%s(%d)\r\n", __func__, __LINE__);
 
-    *outBufferLen = snprintf(outBuffer, inBufferSize, "%d", lUserData->mCounter++);
+    *outBufferLen = snprintf(outBuffer, inBufferSize, "%lu", lUserData->mCounter++);
 
     return true;
 }
@@ -897,7 +888,7 @@ bool esp8266_http_test_web_content_get_cpu(void * inUserData, char * outBuffer, 
 
     printf("%s(%d)\r\n", __func__, __LINE__);
 
-    *outBufferLen = snprintf(outBuffer, inBufferSize, "%d", 100 - ((100 * sCurrentLoad) / s100percentIdle));
+    *outBufferLen = snprintf(outBuffer, inBufferSize, "%lu", 100 - ((100 * sCurrentLoad) / s100percentIdle));
 
     return true;
 }

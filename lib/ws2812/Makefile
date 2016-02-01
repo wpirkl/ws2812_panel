@@ -1,6 +1,9 @@
 
 # Sources
 SRCS += ws2812.c
+SRCS += ws2812_anim.c
+SRCS += ws2812_anim_const_color.c
+
 
 # Config
 include $(ROOTDIR)/config.mk

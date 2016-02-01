@@ -10,8 +10,9 @@
 #include "misc.h"
 
 // ----------------------------- definitions -----------------------------
-#define NR_ROWS         (5)
-#define NR_COLUMNS      (172)
+// moved to header file
+// #define NR_ROWS         (5)
+// #define NR_COLUMNS      (172)
 
 #define SIZE_OF_LED     (24)      // 3(RGB) * 8 Bit
 
@@ -209,6 +210,11 @@ void ws2812_setLED_bulk(uint8_t * inBuffer, size_t inOffset, size_t inBufferSize
     assert_param(inOffset + inBufferSize < sizeof(sLeds));
 
     memcpy(&sLeds[inOffset], inBuffer, inBufferSize);
+}
+
+void ws2812_getLED_Buffer(color ** outBuffer) {
+
+    *outBuffer = sLeds;
 }
 
 void ws2812_init(void) {

@@ -78,7 +78,7 @@ typedef enum {
 static const ts_web_content_handlers * sWebContentHandlers = NULL;
 
 
-void web_content_set_handlers(ts_web_content_handlers * const inWebContentHandlers) {
+void web_content_set_handlers(const ts_web_content_handlers * inWebContentHandlers) {
 
     sWebContentHandlers = inWebContentHandlers;
 }

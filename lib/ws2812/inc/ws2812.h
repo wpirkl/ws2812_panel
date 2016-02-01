@@ -6,6 +6,14 @@
 
 #include "stm32f4xx.h"
 
+//------------------------------ defines ------------------------------
+
+/*! Defines the number of rows of the panel */
+#define NR_ROWS         (5)
+
+/*! Defines the number of columns of the panel */
+#define NR_COLUMNS      (172)
+
 
 //------------------------------ structs ------------------------------
 
@@ -117,6 +125,12 @@ size_t ws2812_getLED_PanelNumberOfRows(void);
 */
 size_t ws2812_getLED_PanelNumberOfColumns(void);
 
+
+/*! Get the panel's buffer
+
+    \param[out] outBuffer   Returns a pointer to the LED buffer
+*/
+void ws2812_getLED_Buffer(color ** outBuffer);
 
 
 #endif
