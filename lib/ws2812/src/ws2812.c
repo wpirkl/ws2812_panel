@@ -3,6 +3,7 @@
 #include <string.h>
 
 #include "ws2812.h"
+#include "ws2812_p.h"
 #include "stm32f4xx_gpio.h"
 #include "stm32f4xx_rcc.h"
 #include "stm32f4xx_dma.h"
@@ -71,7 +72,7 @@ typedef struct {
 
 /*! Structure defining one row */
 typedef struct {
-    color        * mLeds;
+    color_f      * mLeds;
     size_t         mSkipCount;
     ts_skip_leds * mSkip;
 } ts_led_panel;
@@ -82,7 +83,7 @@ static ts_skip_leds sSkipRow3 = {
     .mSkipLen = 6,
 };
 
-static color sLeds[NR_COLUMNS * NR_ROWS];
+static color_f sLeds[NR_COLUMNS * NR_ROWS];
 
 static ts_led_panel sLedPanel[NR_ROWS] = {
     {
@@ -149,9 +150,9 @@ void ws2812_setLED(size_t inRow, size_t inColumn, uint8_t r, uint8_t g, uint8_t 
         return;
     }
 
-    sLedPanel[inRow].mLeds[inColumn].R = r;
-    sLedPanel[inRow].mLeds[inColumn].G = g;
-    sLedPanel[inRow].mLeds[inColumn].B = b;
+    sLedPanel[inRow].mLeds[inColumn].R = (float)r / 255.0f;
+    sLedPanel[inRow].mLeds[inColumn].G = (float)g / 255.0f;
+    sLedPanel[inRow].mLeds[inColumn].B = (float)b / 255.0f;
 }
 
 void ws2812_setLED_Column(size_t inColumn, uint8_t r, uint8_t g, uint8_t b) {
@@ -186,9 +187,9 @@ void ws2812_setLED_All(uint8_t r, uint8_t g, uint8_t b){
             lColumnCount += isLedSkipped(lRowCount, lColumnCount);
 
             if(lColumnCount < NR_COLUMNS) {
-                sLedPanel[lRowCount].mLeds[lColumnCount].R = r;
-                sLedPanel[lRowCount].mLeds[lColumnCount].G = g;
-                sLedPanel[lRowCount].mLeds[lColumnCount].B = b;
+                sLedPanel[lRowCount].mLeds[lColumnCount].R = (float)r / 255.0f;
+                sLedPanel[lRowCount].mLeds[lColumnCount].G = (float)g / 255.0f;
+                sLedPanel[lRowCount].mLeds[lColumnCount].B = (float)b / 255.0f;
             }
         }
     }
@@ -204,15 +205,7 @@ size_t ws2812_getLED_PanelNumberOfColumns(void) {
     return NR_COLUMNS;
 }
 
-void ws2812_setLED_bulk(uint8_t * inBuffer, size_t inOffset, size_t inBufferSize) {
-
-    assert_param(inOffset < sizeof(sLeds));
-    assert_param(inOffset + inBufferSize < sizeof(sLeds));
-
-    memcpy(&sLeds[inOffset], inBuffer, inBufferSize);
-}
-
-void ws2812_getLED_Buffer(color ** outBuffer) {
+void ws2812_getLED_Buffer(color_f ** outBuffer) {
 
     *outBuffer = sLeds;
 }
@@ -677,22 +670,27 @@ static inline void fillBuffer(size_t inRow) {
         /* check if index is still in range */
         if(lIndex < NR_COLUMNS) {
 
+            color lColor;
+            lColor.R = (uint8_t)(255.0f * sLedPanel[inRow].mLeds[lIndex].R);
+            lColor.G = (uint8_t)(255.0f * sLedPanel[inRow].mLeds[lIndex].G);
+            lColor.B = (uint8_t)(255.0f * sLedPanel[inRow].mLeds[lIndex].B);
+
             /* decode colors to pwm duty cycles */
             for(lBitMask = 0x80, lBitIndex = 0; lBitMask != 0; lBitMask >>= 1, lBitIndex++) {
 
-                if((sLedPanel[inRow].mLeds[lIndex].R & lBitMask) != 0) {
+                if((lColor.R & lBitMask) != 0) {
                     lRedPtr[lBitIndex] = WS2812_PWM_ONE;
                 } else {
                     lRedPtr[lBitIndex] = WS2812_PWM_ZERO;
                 }
 
-                if((sLedPanel[inRow].mLeds[lIndex].G & lBitMask) != 0) {
+                if((lColor.G & lBitMask) != 0) {
                     lGreenPtr[lBitIndex] = WS2812_PWM_ONE;
                 } else {
                     lGreenPtr[lBitIndex] = WS2812_PWM_ZERO;
                 }
 
-                if((sLedPanel[inRow].mLeds[lIndex].B & lBitMask) != 0) {
+                if((lColor.B & lBitMask) != 0) {
                     lBluePtr[lBitIndex] = WS2812_PWM_ONE;
                 } else {
                     lBluePtr[lBitIndex] = WS2812_PWM_ZERO;

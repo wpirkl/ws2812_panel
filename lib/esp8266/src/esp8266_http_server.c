@@ -30,7 +30,7 @@
 
 #define HTTP_HEADER_SIZE    (1024)
 
-#define HTTP_BODY_SIZE      (8192)
+#define HTTP_BODY_SIZE      (4096)
 
 /* typedefs */
 

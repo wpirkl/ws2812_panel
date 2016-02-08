@@ -4,8 +4,6 @@
 #include <stdint.h>
 #include <stdio.h>
 
-#include "stm32f4xx.h"
-
 //------------------------------ defines ------------------------------
 
 /*! Defines the number of rows of the panel */
@@ -26,6 +24,17 @@ typedef struct {
     /*! Blue part of the color */
     uint8_t B;
 } color;
+
+
+/*! This structure defines an RGB color in float per color */
+typedef struct {
+    /*! Red part of the color */
+    float R;
+    /*! Green part of the color */
+    float G;
+    /*! Blue part of the color */
+    float B;
+} color_f;
 
 // ----------------------------- functions -----------------------------
 
@@ -81,37 +90,6 @@ void ws2812_setLED_Row(size_t inRow, uint8_t r, uint8_t g, uint8_t b);
 void ws2812_setLED_All(uint8_t r, uint8_t g, uint8_t b);
 
 /*!
-    Set all panel in a bulk
-
-    Panel numbering is from right to left from top to bottom. Use getLEDPanelNumberOfRows and
-    getLEDPanelNumberOfColumns to determine how many LEDs per row and per column excist
-
-    The data is:
-    - byte 0: red of row 0 column 0
-    - byte 1: green of row 0 column 0
-    - byte 2: blue of row 0 column 0
-    - byte 3: red of row 0 column 1
-    - byte 4: green of row 0 column 1
-    - byte 5: blue of row 0 column 1
-    - ...
-    - byte (getLEDPanelNumberOfColumns()-1) * 3 + 0: red of last pixel in first row
-    - byte (getLEDPanelNumberOfColumns()-1) * 3 + 1: green of last pixel in first row
-    - byte (getLEDPanelNumberOfColumns()-1) * 3 + 2: blue of last pixel in first row
-    - byte 3*getLEDPanelNumberOfColumns() + 0: red of row 1 column 0
-    - byte 3*getLEDPanelNumberOfColumns() + 1: green of row 1 column 0
-    - byte 3*getLEDPanelNumberOfColumns() + 2: blue of row 1 column 0
-    - ...
-    - byte 3*(getLEDPanelNumberOfColumns()*getLEDPanelNumberOfRows() - 1) + 0: red of last pixel in last row
-    - byte 3*(getLEDPanelNumberOfColumns()*getLEDPanelNumberOfRows() - 1) + 1: green of last pixel in last row
-    - byte 3*(getLEDPanelNumberOfColumns()*getLEDPanelNumberOfRows() - 1) + 2: blue of last pixel in last row
-
-    \param[in]  inBuffer        buffer containing panel data
-    \param[in]  inOffset        offset into panel data
-    \param[in]  inBufferSize    number of bytes to send
-*/
-void ws2812_setLED_bulk(uint8_t * inBuffer, size_t inOffset, size_t inBufferSize);
-
-/*!
     Get the number of leds in one row
 
     \return the number of leds in one row
@@ -124,14 +102,6 @@ size_t ws2812_getLED_PanelNumberOfRows(void);
     \return the number of leds in one column
 */
 size_t ws2812_getLED_PanelNumberOfColumns(void);
-
-
-/*! Get the panel's buffer
-
-    \param[out] outBuffer   Returns a pointer to the LED buffer
-*/
-void ws2812_getLED_Buffer(color ** outBuffer);
-
 
 #endif
 

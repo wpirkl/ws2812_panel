@@ -19,6 +19,7 @@
 #include "usbd_cdc_vcp.h"
 
 #include "ws2812.h"
+#include "ws2812_anim.h"
 
 #include "esp8266.h"
 #include "esp8266_http_server.h"
@@ -251,6 +252,19 @@ void led_task(void * inParameters) {
         vTaskDelay(1000);
     }
 #endif
+}
+
+void led_anim_task(void * inParameters) {
+
+    /* Initialize LEDs */
+    ws2812_init();
+
+    /* Initialize animation */
+    ws2812_animation_init();
+
+    for(;;) {
+        ws2812_animation_main();
+    }
 }
 
 void esp8266_test_task(void * inParameters) {
@@ -1320,8 +1334,6 @@ void esp8266_mqtt_task(void * inParameters) {
 
 int main(void) {
 
-    NVIC_PriorityGroupConfig( NVIC_PriorityGroup_4 );
-
     init();
 
     /*
@@ -1331,7 +1343,8 @@ int main(void) {
     setbuf(stdout, NULL);
 
     {   /* create tasks */
-        xTaskCreate(led_task,          ( const char * )"led",          configMINIMAL_STACK_SIZE *  8, NULL, configMAX_PRIORITIES - 2, NULL);
+//        xTaskCreate(led_task,          ( const char * )"led",          configMINIMAL_STACK_SIZE *  8, NULL, configMAX_PRIORITIES - 2, NULL);
+        xTaskCreate(led_anim_task,     ( const char * )"led",          configMINIMAL_STACK_SIZE *  8, NULL, configMAX_PRIORITIES - 2, NULL);
 //        xTaskCreate(esp8266_mqtt_task, ( const char * )"esp8266_mqtt", configMINIMAL_STACK_SIZE * 32, NULL, configMAX_PRIORITIES - 3, NULL);
         xTaskCreate(esp8266_http_test, ( const char * )"http",         configMINIMAL_STACK_SIZE * 32, NULL, configMAX_PRIORITIES - 3, NULL);
 //        xTaskCreate(esp8266_task,      ( const char * )"esp8266",    configMINIMAL_STACK_SIZE * 32, NULL, configMAX_PRIORITIES - 3, NULL);
@@ -1350,12 +1363,13 @@ void init() {
 
     GPIO_InitTypeDef  GPIO_InitStructure;
 
+    NVIC_PriorityGroupConfig( NVIC_PriorityGroup_4 );
     // ---------- GPIO -------- //
     // GPIOD Periph clock enable
     RCC_AHB1PeriphClockCmd(RCC_AHB1Periph_GPIOD, ENABLE);
 
     // Configure PD12, PD13, PD14 and PD15 in output pushpull mode
-    GPIO_InitStructure.GPIO_Pin = GPIO_Pin_12 | GPIO_Pin_13| GPIO_Pin_14| GPIO_Pin_15;
+    GPIO_InitStructure.GPIO_Pin = GPIO_Pin_12 | GPIO_Pin_13 | GPIO_Pin_14 | GPIO_Pin_15;
     GPIO_InitStructure.GPIO_Mode = GPIO_Mode_OUT;
     GPIO_InitStructure.GPIO_OType = GPIO_OType_PP;
     GPIO_InitStructure.GPIO_Speed = GPIO_Speed_100MHz;

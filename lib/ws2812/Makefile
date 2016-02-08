@@ -3,6 +3,7 @@
 SRCS += ws2812.c
 SRCS += ws2812_anim.c
 SRCS += ws2812_anim_const_color.c
+SRCS += ws2812_transition_fade.c
 
 
 # Config

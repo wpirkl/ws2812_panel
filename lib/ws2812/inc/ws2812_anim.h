@@ -1,7 +1,7 @@
 #ifndef WS2812_ANIM_H_
 #define WS2812_ANIM_H_
 
-#include <stdint.h>
+#include <stdint.h>     // uint8_t
 
 
 /*! Initialize Animation */

@@ -1,8 +1,8 @@
 #ifndef WS2812_ANIM_BASE_H_
 #define WS2812_ANIM_BASE_H_
 
-#include <stdint.h>
-#include <stdbool.h>
+
+#include "FreeRTOS.h"   // for TickType_t
 
 
 union u_ws2812_anim;
@@ -15,7 +15,7 @@ typedef union u_ws2812_anim_param tu_ws2812_anim_param;
 typedef struct {
 
     /*! Process function */
-    bool    (* mf_update)(tu_ws2812_anim * pThis);
+    TickType_t  (* mf_update)(tu_ws2812_anim * pThis);
 
 } ts_ws2812_anim_base;
 
