@@ -1,7 +1,6 @@
 #include "stm32f4xx_exti.h"
 #include "stm32f4xx_it.h"
 #include "stm32f4xx_conf.h"
-#include "main.h"
 
 #include "usb_core.h"
 #include "usbd_core.h"
@@ -88,3 +87,20 @@ void OTG_HS_EP1_OUT_IRQHandler(void)
   USBD_OTG_EP1OUT_ISR_Handler (&USB_OTG_dev);
 }
 #endif
+
+void HardFault_Handler( void ) __attribute__( ( naked ) );
+void HardFault_Handler(void) {
+
+    __asm volatile (
+        "    movs r0,#4       \n"
+        "    movs r1, lr      \n"
+        "    tst r0, r1       \n"
+        "    beq _MSP         \n"
+        "    mrs r0, psp      \n"
+        "    b _HALT          \n"
+        "_MSP:                \n"
+        "    mrs r0, msp      \n"
+        "_HALT:               \n"
+        "    ldr r1,[r0,#20]  \n"
+        "    bkpt #0          \n");
+}

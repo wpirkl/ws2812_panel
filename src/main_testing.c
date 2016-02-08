@@ -4,19 +4,15 @@
 #include <string.h>
 #include <inttypes.h>
 #include <ctype.h>
-#include <math.h>
 
-#include "stm32f4xx_rcc.h"
-#include "stm32f4xx_conf.h"
-#include "stm32f4xx_gpio.h"
-#include "stm32f4xx.h"
-#include "misc.h"
-#include "main.h"
+#include "FreeRTOS.h"
+#include "task.h"
 
-#include "usbd_cdc_core.h"
-#include "usbd_usr.h"
-#include "usbd_desc.h"
-#include "usbd_cdc_vcp.h"
+#include "stm32f4xx_gpio.h" // for GPIO_InitTypeDef, GPIO_Init, GPIO_ResetBits and GPIO_SetBits
+
+#include "usbd_cdc_vcp.h"   // for VCP_get_char
+
+#include "init.h"
 
 #include "ws2812.h"
 #include "ws2812_anim.h"
@@ -28,19 +24,10 @@
 
 #include "uart_dma.h"
 
-#include "FreeRTOS.h"
-#include "task.h"
-
 #include "MQTTClient.h"
 
 /* place heap into ccm */
 uint8_t __attribute__ ((section(".ccmbss"), aligned(8))) ucHeap[ configTOTAL_HEAP_SIZE ];
-
-// Private variables
-volatile uint32_t time_var1, time_var2;
-__ALIGN_BEGIN USB_OTG_CORE_HANDLE  USB_OTG_dev __ALIGN_END;
-
-void init();
 
 void vApplicationStackOverflowHook( TaskHandle_t xTask, signed char *pcTaskName) {
 
@@ -48,24 +35,8 @@ void vApplicationStackOverflowHook( TaskHandle_t xTask, signed char *pcTaskName)
 }
 
 void vApplicationMallocFailedHook( void ) {
+
     printf("%s(%d): Malloc failed active task: %p\r\n", __FILE__, __LINE__, xTaskGetCurrentTaskHandle());
-}
-
-void HardFault_Handler( void ) __attribute__( ( naked ) );
-void HardFault_Handler(void) {
-
-    __asm volatile (
-        "    movs r0,#4       \n"
-        "    movs r1, lr      \n"
-        "    tst r0, r1       \n"
-        "    beq _MSP         \n"
-        "    mrs r0, psp      \n"
-        "    b _HALT          \n"
-        "_MSP:                \n"
-        "    mrs r0, msp      \n"
-        "_HALT:               \n"
-        "    ldr r1,[r0,#20]  \n"
-        "    bkpt #0          \n");
 }
 
 static volatile uint32_t s100percentIdle = 0;
@@ -1336,12 +1307,6 @@ int main(void) {
 
     init();
 
-    /*
-     * Disable STDOUT buffering. Otherwise nothing will be printed
-     * before a newline character or when the buffer is flushed.
-     */
-    setbuf(stdout, NULL);
-
     {   /* create tasks */
 //        xTaskCreate(led_task,          ( const char * )"led",          configMINIMAL_STACK_SIZE *  8, NULL, configMAX_PRIORITIES - 2, NULL);
         xTaskCreate(led_anim_task,     ( const char * )"led",          configMINIMAL_STACK_SIZE *  8, NULL, configMAX_PRIORITIES - 2, NULL);
@@ -1355,37 +1320,6 @@ int main(void) {
     }
 
     return 0;
-}
-
-
-/* initialize usb */
-void init() {
-
-    GPIO_InitTypeDef  GPIO_InitStructure;
-
-    NVIC_PriorityGroupConfig( NVIC_PriorityGroup_4 );
-    // ---------- GPIO -------- //
-    // GPIOD Periph clock enable
-    RCC_AHB1PeriphClockCmd(RCC_AHB1Periph_GPIOD, ENABLE);
-
-    // Configure PD12, PD13, PD14 and PD15 in output pushpull mode
-    GPIO_InitStructure.GPIO_Pin = GPIO_Pin_12 | GPIO_Pin_13 | GPIO_Pin_14 | GPIO_Pin_15;
-    GPIO_InitStructure.GPIO_Mode = GPIO_Mode_OUT;
-    GPIO_InitStructure.GPIO_OType = GPIO_OType_PP;
-    GPIO_InitStructure.GPIO_Speed = GPIO_Speed_100MHz;
-    GPIO_InitStructure.GPIO_PuPd = GPIO_PuPd_NOPULL;
-    GPIO_Init(GPIOD, &GPIO_InitStructure);
-
-    // ------------- USB -------------- //
-    USBD_Init(&USB_OTG_dev,
-              USB_OTG_FS_CORE_ID,
-              &USR_desc,
-              &USBD_CDC_cb,
-              &USR_cb);
-}
-
-void _init(void) {
-    
 }
 
 /* eof */

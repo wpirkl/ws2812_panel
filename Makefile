@@ -6,9 +6,11 @@ export ROOTDIR=$(shell pwd)
 
 # Sources
 SRCS  = main_testing.c
+#SRCS  = main.c
 SRCS += stm32f4xx_it.c
 SRCS += system_stm32f4xx.c
 SRCS += syscalls.c
+SRCS += init.c
 CPPSRCS = 
 
 # USB
