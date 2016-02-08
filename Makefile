@@ -5,11 +5,17 @@ STLINK = st-flash
 export ROOTDIR=$(shell pwd)
 
 # Sources
-SRCS = main.c stm32f4xx_it.c system_stm32f4xx.c syscalls.c
+SRCS  = main_testing.c
+SRCS += stm32f4xx_it.c
+SRCS += system_stm32f4xx.c
+SRCS += syscalls.c
 CPPSRCS = 
 
 # USB
-SRCS += usbd_usr.c usbd_cdc_vcp.c usbd_desc.c usb_bsp.c
+SRCS += usbd_usr.c
+SRCS += usbd_cdc_vcp.c
+SRCS += usbd_desc.c
+SRCS += usb_bsp.c
 
 # add startup file to build
 STARTUP = lib/startup_stm32f4xx.s
