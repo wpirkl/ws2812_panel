@@ -31,12 +31,15 @@ void vApplicationIdleHook( void ) {
 void cpu_load_task(void * inParameters) {
 
     uint32_t lLastCounter;
+    TickType_t xLastWakeTime;
+
+    xLastWakeTime = xTaskGetTickCount();
 
     for(;;) {
 
         lLastCounter = sLoadCounter;
 
-        vTaskDelay(1000);
+        vTaskDelayUntil(&xLastWakeTime, 1000);
 
         sCurrentLoad = sLoadCounter - lLastCounter;
     }
@@ -105,6 +108,11 @@ static void esp8266_configure(void) {
 
     /* give a bit of time to start all the tasks */
     vTaskDelay(100);
+
+    /* reset */
+
+    /* echo off */
+
 }
 
 /*! Initialize the web server
@@ -113,7 +121,10 @@ static void esp8266_configure(void) {
 */
 static void init_http(void) {
 
+    /* set web content handlers */
+//    web_content_set_handlers(&sTestWebContent);
 
+    /* start http server */
     esp8266_http_server_start();
 }
 
@@ -127,12 +138,26 @@ static void init_task(void * inParameters) {
 
     TaskHandle_t xHandle = NULL;
 
+    {   /* measure 100 percent idle */
+        uint32_t lBackupCounter;
+
+        lBackupCounter = sLoadCounter;
+        vTaskDelay(1000);
+        s100percentIdle = sLoadCounter - lBackupCounter;
+    }
+
     /* init ws2812 library */
     ws2812_init();
+
+    /* init animation */
     ws2812_animation_init();
 
+    if(!xTaskCreate(cpu_load_task, ( const char * )"cpu", configMINIMAL_STACK_SIZE, NULL, configMAX_PRIORITIES - 1, &xHandle)) {
+        /* check how we can handle errors */
+    }
+
     /* start led task */
-    if(!xTaskCreate(ws2812_anim_task, "ws2812_anim", configMINIMAL_STACK_SIZE * 8, NULL, configMAX_PRIORITIES - 2, NULL)) {
+    if(!xTaskCreate(ws2812_anim_task, "ws2812_anim", configMINIMAL_STACK_SIZE * 8, NULL, configMAX_PRIORITIES - 2, &xHandle)) {
         /* check how we can handle errors */
     }
 

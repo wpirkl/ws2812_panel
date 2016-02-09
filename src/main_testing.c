@@ -67,6 +67,10 @@ void led_task(void * inParameters) {
     /* Initialize LEDs */
     ws2812_init();
 
+    /* Initialize animation */
+    ws2812_animation_init();
+
+
     /* power on test */
     {
         size_t lColumnNum = ws2812_getLED_PanelNumberOfColumns();
@@ -129,7 +133,7 @@ void led_task(void * inParameters) {
         ws2812_updateLED();
     }
 
-#if 1
+#if 0
     {   /* LED test pattern */
         uint8_t lRed = 0;
         uint8_t lGreen = 0;
@@ -220,22 +224,9 @@ void led_task(void * inParameters) {
     }
 #else
     for(;;) {
-        vTaskDelay(1000);
-    }
-#endif
-}
-
-void led_anim_task(void * inParameters) {
-
-    /* Initialize LEDs */
-    ws2812_init();
-
-    /* Initialize animation */
-    ws2812_animation_init();
-
-    for(;;) {
         ws2812_animation_main();
     }
+#endif
 }
 
 void esp8266_test_task(void * inParameters) {
@@ -1308,8 +1299,7 @@ int main(void) {
     init();
 
     {   /* create tasks */
-//        xTaskCreate(led_task,          ( const char * )"led",          configMINIMAL_STACK_SIZE *  8, NULL, configMAX_PRIORITIES - 2, NULL);
-        xTaskCreate(led_anim_task,     ( const char * )"led",          configMINIMAL_STACK_SIZE *  8, NULL, configMAX_PRIORITIES - 2, NULL);
+        xTaskCreate(led_task,          ( const char * )"led",          configMINIMAL_STACK_SIZE *  8, NULL, configMAX_PRIORITIES - 2, NULL);
 //        xTaskCreate(esp8266_mqtt_task, ( const char * )"esp8266_mqtt", configMINIMAL_STACK_SIZE * 32, NULL, configMAX_PRIORITIES - 3, NULL);
         xTaskCreate(esp8266_http_test, ( const char * )"http",         configMINIMAL_STACK_SIZE * 32, NULL, configMAX_PRIORITIES - 3, NULL);
 //        xTaskCreate(esp8266_task,      ( const char * )"esp8266",    configMINIMAL_STACK_SIZE * 32, NULL, configMAX_PRIORITIES - 3, NULL);
