@@ -1,15 +1,25 @@
 <div id="led_content" class="panel-body">
 	<form class="form-horizontal" role="form" method="post">
 		<div class="form-group">
-			<label class="control-label col-sm-3" for="animation">Animation:</label>
+			<label class="control-label col-sm-3" for="tra">Transition:</label>
 			<div class="col-sm-9">
-				<select class="form-control" id="animation" name="animation">
+				<select class="form-control" id="tra" name="tra">
+					<option value="0">Fade</option>
+					<option value="1">Reserved</option>
+				</select>
+			</div>
+		</div>
+		<div id="trpar"></div>
+		<div class="form-group">
+			<label class="control-label col-sm-3" for="ani">Animation:</label>
+			<div class="col-sm-9">
+				<select class="form-control" id="ani" name="ani">
 					<option value="0">Constant Color</option>
 					<option value="1">Reserved</option>
 				</select>
 			</div>
 		</div>
-		<div id="params"></div>
+		<div id="anipar"></div>
 		<div class="form-group">
 			<div class="col-sm-offset-3 col-sm-9">
 				<button type="submit" class="btn btn-default">Set</button>

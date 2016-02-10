@@ -811,12 +811,22 @@ typedef struct {
     /*! Buffer for Password */
     uint8_t     mPass[65];
 
+    /*! Animation received */
+    bool        mAnimationReceived;
+
+    /*! Animation */
+    size_t      mAnimation;
+
+    /*! Color */
+    color       mColor;
+
 } ts_myUserData;
 
 static ts_myUserData sUserData = {
     .mCounter = 0,
     .mSSIDLen = 0,
     .mPassLen = 0,
+    .mAnimationReceived = false
 };
 
 bool esp8266_http_test_web_content_get_status_ssid(void * inUserData, char * outBuffer, size_t inBufferSize, size_t * outBufferLen) {
@@ -826,7 +836,7 @@ bool esp8266_http_test_web_content_get_status_ssid(void * inUserData, char * out
 
 //    ts_myUserData * lUserData = (ts_myUserData*)inUserData;
 
-    printf("%s(%d)\r\n", __func__, __LINE__);
+//    printf("%s(%d)\r\n", __func__, __LINE__);
 
     if(esp8266_cmd_get_cwjap_cur(lSSID_retrv, sizeof(lSSID_retrv) - 1, &lSSID_retrv_len)) {
 
@@ -844,7 +854,7 @@ bool esp8266_http_test_web_content_get_counter(void * inUserData, char * outBuff
 
     ts_myUserData * lUserData = (ts_myUserData*)inUserData;
 
-    printf("%s(%d)\r\n", __func__, __LINE__);
+//    printf("%s(%d)\r\n", __func__, __LINE__);
 
     *outBufferLen = snprintf(outBuffer, inBufferSize, "%lu", lUserData->mCounter++);
 
@@ -853,7 +863,7 @@ bool esp8266_http_test_web_content_get_counter(void * inUserData, char * outBuff
 
 bool esp8266_http_test_web_content_get_ver(void * inUserData, char * outBuffer, size_t inBufferSize, size_t * outBufferLen) {
 
-    printf("%s(%d)\r\n", __func__, __LINE__);
+//    printf("%s(%d)\r\n", __func__, __LINE__);
 
     *outBufferLen = snprintf(outBuffer, inBufferSize, "1.0");
 
@@ -862,7 +872,7 @@ bool esp8266_http_test_web_content_get_ver(void * inUserData, char * outBuffer, 
 
 bool esp8266_http_test_web_content_get_cpu(void * inUserData, char * outBuffer, size_t inBufferSize, size_t * outBufferLen) {
 
-    printf("%s(%d)\r\n", __func__, __LINE__);
+//    printf("%s(%d)\r\n", __func__, __LINE__);
 
     *outBufferLen = snprintf(outBuffer, inBufferSize, "%lu", 100 - ((100 * sCurrentLoad) / s100percentIdle));
 
@@ -912,6 +922,96 @@ bool esp8266_http_test_web_content_set_password(void * inUserData, const char * 
     return true;
 }
 
+bool esp8266_http_test_web_content_set_animation(void * inUserData, const char * const inValue, size_t inValueLength) {
+
+    ts_myUserData * lUserData = (ts_myUserData*)inUserData;
+
+    char lBuffer[12];
+    size_t lLen;
+
+    lLen = ((sizeof(lBuffer)-1) < inValueLength)? (sizeof(lBuffer)-1) : inValueLength;
+
+    memcpy(lBuffer, inValue, lLen);
+    lBuffer[lLen] = '\0';
+
+    lUserData->mAnimationReceived = true;
+
+    lUserData->mAnimation = strtoul(lBuffer, NULL, 10);
+
+    printf("%s(%d): %s\r\n", __func__, __LINE__, lBuffer);
+
+    return true;
+}
+
+static uint8_t hex_decode(char c) {
+
+    if(c >= '0' && c <= '9') {
+        return c - '0';
+    } else if(c >= 'a' && c <= 'f') {
+        return c - 'a' + 10;
+    } else if(c >= 'A' && c <= 'F') {
+        return c - 'a' + 10;
+    } else {
+        return 0;
+    }
+}
+
+bool esp8266_http_test_web_content_set_color(void * inUserData, const char * const inValue, size_t inValueLength) {
+
+    ts_myUserData * lUserData = (ts_myUserData*)inUserData;
+
+    char lBuffer[8];
+    size_t lLen;
+
+    lLen = ((sizeof(lBuffer)-1) < inValueLength)? (sizeof(lBuffer)-1) : inValueLength;
+
+    memcpy(lBuffer, inValue, lLen);
+    lBuffer[lLen] = '\0';
+
+    printf("%s(%d): %s\r\n", __func__, __LINE__, lBuffer);
+
+    if(inValueLength == 7) {
+        /* first character is # */
+        lUserData->mColor.R = (hex_decode(inValue[1]) << 4) | hex_decode(inValue[2]);
+        lUserData->mColor.G = (hex_decode(inValue[3]) << 4) | hex_decode(inValue[4]);
+        lUserData->mColor.B = (hex_decode(inValue[5]) << 4) | hex_decode(inValue[6]);
+    }
+
+    printf("%s(%d): decoded color R: %02x, G: %02x, B: %02x\r\n", __func__, __LINE__, lUserData->mColor.R, lUserData->mColor.G, lUserData->mColor.B);
+
+    return true;
+}
+
+bool esp8266_http_test_web_content_set_transition(void * inUserData, const char * const inValue, size_t inValueLength) {
+
+    char lBuffer[12];
+    size_t lLen;
+
+    lLen = ((sizeof(lBuffer)-1) < inValueLength)? (sizeof(lBuffer)-1) : inValueLength;
+
+    memcpy(lBuffer, inValue, lLen);
+    lBuffer[lLen] = '\0';
+
+    printf("%s(%d): %s\r\n", __func__, __LINE__, lBuffer);
+
+    return true;
+}
+
+bool esp8266_http_test_web_content_set_transition_time(void * inUserData, const char * const inValue, size_t inValueLength) {
+
+    char lBuffer[12];
+    size_t lLen;
+
+    lLen = ((sizeof(lBuffer)-1) < inValueLength)? (sizeof(lBuffer)-1) : inValueLength;
+
+    memcpy(lBuffer, inValue, lLen);
+    lBuffer[lLen] = '\0';
+
+    printf("%s(%d): %s\r\n", __func__, __LINE__, lBuffer);
+
+    return true;
+}
+
 void esp8266_http_test_web_content_start_parse(void * inUserData) {
 
     ts_myUserData * lUserData = (ts_myUserData*)inUserData;
@@ -927,7 +1027,7 @@ void esp8266_http_test_web_content_done_parse(void * inUserData) {
 
     printf("%s(%d)\r\n", __func__, __LINE__);
 
-    /* process here */
+    /* wifi form */
     if(lUserData->mSSIDLen > 0 && lUserData->mPassLen > 0) {
 
         printf("Connecting to AP... ");
@@ -937,8 +1037,26 @@ void esp8266_http_test_web_content_done_parse(void * inUserData) {
             printf("Failed!\r\n");
         }
 
+        /* clear ssid received */
         lUserData->mSSIDLen = 0;
         lUserData->mPassLen = 0;
+    }
+
+    /* animation form */
+    if(lUserData->mAnimationReceived) {
+
+        switch(lUserData->mAnimation) {
+            case 0:     /* constant color */
+
+                printf("%s(%d): Animation constant color\r\n", __FILE__, __LINE__);
+                ws2812_anim_const_color(lUserData->mColor.R, lUserData->mColor.G, lUserData->mColor.B);
+                break;
+            default:    /* unkonwn animation */
+                break;
+        }
+
+        /* clear animation received */
+        lUserData->mAnimationReceived = false;
     }
 
     xSemaphoreGiveRecursive(lUserData->mMutex);
@@ -946,7 +1064,7 @@ void esp8266_http_test_web_content_done_parse(void * inUserData) {
 
 static const ts_web_content_handlers sTestWebContent = {
 
-    .mHandlerCount = 6,
+    .mHandlerCount = 10,
     .mParsingStart = esp8266_http_test_web_content_start_parse,
     .mParsingDone  = esp8266_http_test_web_content_done_parse,
     .mUserData = (void*)&sUserData,
@@ -980,6 +1098,26 @@ static const ts_web_content_handlers sTestWebContent = {
             .mToken = "password",
             .mGet = NULL,
             .mSet = esp8266_http_test_web_content_set_password,
+        },
+        {
+            .mToken = "ani",
+            .mGet = NULL,
+            .mSet = esp8266_http_test_web_content_set_animation,
+        },
+        {
+            .mToken = "ancol",
+            .mGet = NULL,
+            .mSet = esp8266_http_test_web_content_set_color,
+        },
+        {
+            .mToken = "tra",
+            .mGet = NULL,
+            .mSet = esp8266_http_test_web_content_set_transition,
+        },
+        {
+            .mToken = "trtime",
+            .mGet = NULL,
+            .mSet = esp8266_http_test_web_content_set_transition_time,
         }
     }
 };
