@@ -29,4 +29,7 @@ CFLAGS += -mfloat-abi=hard
 CFLAGS += -ffreestanding
 CFLAGS += -nostdlib
 
+CFLAGS += -fdata-sections
+CFLAGS += -ffunction-sections
+
 CPPFLAGS = $(CFLAGS) -lgcc

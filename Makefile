@@ -87,7 +87,7 @@ $(LIBS_BUILD): config.mk rules.mk
 	$(MAKE) $(notdir $@) -C $(dir $@)
 
 $(OUTPATH)/$(PROJ_NAME).elf: $(OBJS) $(CPPOBJS) $(LIBS_BUILD)
-	$(CC) $(CFLAGS) -Tstm32_flash.ld $(OBJS) $(CPPOBJS) $(STARTUP) -o $@ $(SYSLIBS) $(LIB) -Wl,-Map=$(OUTPATH)/$(PROJ_NAME).map
+	$(CC) $(CFLAGS) -Tstm32_flash.ld $(OBJS) $(CPPOBJS) $(STARTUP) -o $@ $(SYSLIBS) $(LIB) -Wl,--gc-sections -Wl,--cref -Wl,-Map=$(OUTPATH)/$(PROJ_NAME).map
 
 $(OUTPATH)/$(PROJ_NAME).hex: $(OUTPATH)/$(PROJ_NAME).elf
 	$(OBJCOPY) -O ihex $< $@
