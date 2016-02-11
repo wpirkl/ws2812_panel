@@ -3,10 +3,11 @@
 #include <stdio.h>      // for dbg
 #include <string.h>     // for memcpy
 
-#include "ws2812_p.h"   // for color and NR_ROWS, NR_COLUMNS
+#include "ws2812.h"   // for color_f and WS2812_NR_ROWS, WS2812_NR_COLUMNS
 
 #include "ws2812_anim_obj.h"
 #include "ws2812_transition_obj.h"
+
 #include "ws2812_anim.h"
 
 #include "FreeRTOS.h"
@@ -15,6 +16,9 @@
 
 // animations
 #include "ws2812_anim_const_color.h"
+
+// transitions
+#include "ws2812_transition_fade.h"
 
 
 // ------------------- debug ------------------------
@@ -31,6 +35,11 @@
 #define dbg_err dbg_err_on
 
 // ------------------- defines ----------------------
+
+/*! Defines the animation frequency in Hz */
+#define WS2812_ANIMATION_FREQ       (100)
+
+
 
 /*! Enumerates the animation states */
 typedef enum {
@@ -91,24 +100,22 @@ typedef struct {
     /*! Animation state */
     te_ws2812_animation_state   mState;
 
+    /*! next animation */
+    size_t                      mCurrentAnimation;
+
     /*! Received command */
     ts_ws2812_anim_ctrl_cmd     mLastCommand;
 
-    /*! Transition */
-    te_ws2812_transitions       mTransition;
+    /*! Animation object */
+    tu_ws2812_anim              mAnimation[2];
 
-    /*! Transition parameters */
-    tu_ws2812_trans_param       mTransParam;
+    /*! Transition object */
+    tu_ws2812_trans             mTransition;
 
 } ts_ws2812_anim_ctrl;
 
 
 // ------------------- local variables --------------
-
-
-/*! Animation object */
-static tu_ws2812_anim sAnimation;
-
 
 /*! Animation control object */
 static ts_ws2812_anim_ctrl sAnimationControl;
@@ -119,10 +126,6 @@ static const f_ws2812_anim_init sAnimationInitFuncs[] = {
 
     [WS2812_ANIMATION_CONSTANT_COLOR] = ws2812_anim_const_color_init,
 };
-
-
-/*! Transition object */
-static tu_ws2812_trans sTransition;
 
 
 /*! Transition initialization functions */
@@ -137,16 +140,13 @@ static const f_ws2812_trans_init sTransitionInitFuncs[] = {
 
 void ws2812_animation_init(void) {
 
-    sAnimationControl.mMsgQueue    = xQueueCreate(4, sizeof(ts_ws2812_anim_ctrl_cmd));
-    sAnimationControl.mState       = WS2812_ANIM_STATE_MAIN;
+    sAnimationControl.mMsgQueue         = xQueueCreate(4, sizeof(ts_ws2812_anim_ctrl_cmd));
+    sAnimationControl.mState            = WS2812_ANIM_STATE_MAIN;
+    sAnimationControl.mCurrentAnimation = 0;
 
     if(!sAnimationControl.mMsgQueue) {
         dbg_err("%s(%d): Failed initializing mMsgQueue\r\n", __FILE__, __LINE__);
     }
-
-    /* fade transition */
-    sAnimationControl.mTransition = WS2812_TRANSITION_FADE;
-    sAnimationControl.mTransParam.mFade.mDuration = 25;
 
     /* black color */
     sAnimationControl.mLastCommand.mAnimation = WS2812_ANIMATION_CONSTANT_COLOR;
@@ -154,69 +154,62 @@ void ws2812_animation_init(void) {
     sAnimationControl.mLastCommand.mAnimParam.mConstantColor.mColor.G = 0;
     sAnimationControl.mLastCommand.mAnimParam.mConstantColor.mColor.B = 0;
 
-    /* start with a clean transition */
-    sAnimationControl.mLastCommand.mTransition = sAnimationControl.mTransition;
-    sAnimationControl.mLastCommand.mTransParam.mFade.mDuration = sAnimationControl.mTransParam.mFade.mDuration;
+    /* initialize animation */
+    sAnimationInitFuncs[sAnimationControl.mLastCommand.mAnimation](&sAnimationControl.mAnimation[sAnimationControl.mCurrentAnimation], &sAnimationControl.mLastCommand.mAnimParam);
 }
 
-
-TickType_t ws2812_animation_update(void) {
-
-    if(sAnimation.mBase.mf_update) {
-
-        return sAnimation.mBase.mf_update(&sAnimation);
-    }
-
-    return portMAX_DELAY;
-}
-
-static TickType_t ws2812_transition_update(void) {
-
-    if(sTransition.mBase.mf_update) {
-
-        return sTransition.mBase.mf_update(&sTransition);
-    }
-
-    return portMAX_DELAY;
-}
-
-void ws2812_animation_switch(void) {
-
-    sAnimationInitFuncs[sAnimationControl.mLastCommand.mAnimation](&sAnimation, &sAnimationControl.mLastCommand.mAnimParam);
-}
 
 void ws2812_transition_done(void) {
 
+    /* switch animation */
+    sAnimationControl.mCurrentAnimation = (sAnimationControl.mCurrentAnimation + 1) & 1;
+
+    /* switch mode */
     sAnimationControl.mState = WS2812_ANIM_STATE_MAIN;
 }
 
 
 void ws2812_animation_main(void) {
 
-    TickType_t lDelay;
+    /* run at 100 Hz */
+    TickType_t lDelay = configTICK_RATE_HZ / WS2812_ANIMATION_FREQ;
 
-    /* get the time base */
     vTaskSetTimeOutState(&sAnimationControl.mTimeout);
 
     switch(sAnimationControl.mState) {
 
         case WS2812_ANIM_STATE_TRANSIT: {
 
-                lDelay = ws2812_transition_update();
+                /* run animation 1 */
+                sAnimationControl.mAnimation[sAnimationControl.mCurrentAnimation].mBase.mf_update(&sAnimationControl.mAnimation[sAnimationControl.mCurrentAnimation]);
+
+                /* run animatino 2 */
+                sAnimationControl.mAnimation[(sAnimationControl.mCurrentAnimation + 1) & 1].mBase.mf_update(&sAnimationControl.mAnimation[(sAnimationControl.mCurrentAnimation + 1) & 1]);
+
+                sAnimationControl.mTransition.mBase.mf_update(&sAnimationControl.mTransition,
+                                                              &sAnimationControl.mAnimation[sAnimationControl.mCurrentAnimation],
+                                                              &sAnimationControl.mAnimation[(sAnimationControl.mCurrentAnimation + 1) & 1]);
+
+                /* update led from transition buffer */
+                ws2812_updateLED(sAnimationControl.mTransition.mBase.mPanel);
             }
             break;
         case WS2812_ANIM_STATE_MAIN:
         default: {
 
                 /* run animation */
-                lDelay = ws2812_animation_update();
+                sAnimationControl.mAnimation[sAnimationControl.mCurrentAnimation].mBase.mf_update(&sAnimationControl.mAnimation[sAnimationControl.mCurrentAnimation]);
+
+                /* update led from animation buffer */
+                ws2812_updateLED(sAnimationControl.mAnimation[sAnimationControl.mCurrentAnimation].mBase.mPanel);
             }
             break;
     }
-    ws2812_updateLED();
 
     /* Adapt the timeout according to the animation's request */
     if(xTaskCheckForTimeOut(&sAnimationControl.mTimeout, &lDelay)) {
+
+        dbg_err("%s(%d): timed out!\r\n", __FILE__, __LINE__);
 
         lDelay = 0; // timed out
     } // xTaskCheckForTimeOut adapts lDelay to fit to the timeout
@@ -226,7 +219,10 @@ void ws2812_animation_main(void) {
 
         /* if we received a command, go to transition state */
         sAnimationControl.mState = WS2812_ANIM_STATE_TRANSIT;
-        sTransitionInitFuncs[sAnimationControl.mLastCommand.mTransition](&sTransition, &sAnimationControl.mLastCommand.mTransParam);
+        sTransitionInitFuncs[sAnimationControl.mLastCommand.mTransition](&sAnimationControl.mTransition, &sAnimationControl.mLastCommand.mTransParam);
+
+        /* init second animation */
+        sAnimationInitFuncs[sAnimationControl.mLastCommand.mAnimation](&sAnimationControl.mAnimation[(sAnimationControl.mCurrentAnimation + 1) & 1], &sAnimationControl.mLastCommand.mAnimParam);
     }
 }
 
@@ -241,8 +237,8 @@ void ws2812_anim_const_color(uint8_t inRed, uint8_t inGreen, uint8_t inBlue) {
     lCommand.mAnimParam.mConstantColor.mColor.B = inBlue;
 
     /*! Use configured transition */
-    lCommand.mTransition = sAnimationControl.mTransition;
-    memcpy(&lCommand.mTransParam, &sAnimationControl.mTransParam, sizeof(tu_ws2812_trans_param));
+    lCommand.mTransition = WS2812_TRANSITION_FADE;
+    lCommand.mTransParam.mFade.mDuration = 500;
 
     xQueueSend(sAnimationControl.mMsgQueue, &lCommand, portMAX_DELAY );
 }

@@ -3,7 +3,6 @@
 #include <string.h>
 
 #include "ws2812.h"
-#include "ws2812_p.h"
 #include "stm32f4xx_gpio.h"
 #include "stm32f4xx_rcc.h"
 #include "stm32f4xx_dma.h"
@@ -12,8 +11,8 @@
 
 // ----------------------------- definitions -----------------------------
 // moved to header file
-// #define NR_ROWS         (5)
-// #define NR_COLUMNS      (172)
+// #define WS2812_NR_ROWS         (5)
+// #define WS2812_NR_COLUMNS      (172)
 
 #define SIZE_OF_LED     (24)      // 3(RGB) * 8 Bit
 
@@ -72,48 +71,48 @@ typedef struct {
 
 /*! Structure defining one row */
 typedef struct {
-    color_f      * mLeds;
-    size_t         mSkipCount;
-    ts_skip_leds * mSkip;
+    size_t                     mLeds;
+    size_t                     mSkipCount;
+    const ts_skip_leds * const mSkip;
 } ts_led_panel;
 
 
-static ts_skip_leds sSkipRow3 = {
+static const ts_skip_leds sSkipRow3 = {
     .mStartIndex = 143,
     .mSkipLen = 6,
 };
 
-static color_f sLeds[NR_COLUMNS * NR_ROWS];
+static color_f * sUpdatePanel = NULL;
 
-static ts_led_panel sLedPanel[NR_ROWS] = {
+static const ts_led_panel sLedPanel[WS2812_NR_ROWS] = {
     {
-        .mLeds = &sLeds[0 * NR_COLUMNS],
+        .mLeds = 0 * WS2812_NR_COLUMNS,
         .mSkipCount = 0,
         .mSkip = NULL
     },
     {
-        .mLeds = &sLeds[1 * NR_COLUMNS],
+        .mLeds = 1 * WS2812_NR_COLUMNS,
         .mSkipCount = 0,
         .mSkip = NULL
     },
     {
-        .mLeds = &sLeds[2 * NR_COLUMNS],
+        .mLeds = 2 * WS2812_NR_COLUMNS,
         .mSkipCount = 1,
         .mSkip = &sSkipRow3,
     },
     {
-        .mLeds = &sLeds[3 * NR_COLUMNS],
+        .mLeds = 3 * WS2812_NR_COLUMNS,
         .mSkipCount = 0,
         .mSkip = NULL
     },
     {
-        .mLeds = &sLeds[4 * NR_COLUMNS],
+        .mLeds = 4 * WS2812_NR_COLUMNS,
         .mSkipCount = 0,
         .mSkip = NULL
     },
 };
 
-static ts_update_row sLedDMA[NR_ROWS];
+static ts_update_row sLedDMA[WS2812_NR_ROWS];
 
 /*!
     Check if a led is skipped
@@ -140,56 +139,56 @@ static inline size_t isLedSkipped(size_t inLedRow, size_t inLedColumn) {
     return 0;
 }
 
-void ws2812_setLED(size_t inRow, size_t inColumn, uint8_t r, uint8_t g, uint8_t b) {
+void ws2812_setLED(color_f * inPanel, size_t inRow, size_t inColumn, uint8_t r, uint8_t g, uint8_t b) {
 
-    assert_param(inRow < NR_ROWS);
-    assert_param(inColumn < NR_COLUMNS);
+    assert_param(inRow < WS2812_NR_ROWS);
+    assert_param(inColumn < WS2812_NR_COLUMNS);
 
     /* don't waste time if led is skipped */
     if(isLedSkipped(inRow, inColumn) > 0) {
         return;
     }
 
-    sLedPanel[inRow].mLeds[inColumn].R = (float)r / 255.0f;
-    sLedPanel[inRow].mLeds[inColumn].G = (float)g / 255.0f;
-    sLedPanel[inRow].mLeds[inColumn].B = (float)b / 255.0f;
+    inPanel[sLedPanel[inRow].mLeds + inColumn].R = (float)r / 255.0f;
+    inPanel[sLedPanel[inRow].mLeds + inColumn].G = (float)g / 255.0f;
+    inPanel[sLedPanel[inRow].mLeds + inColumn].B = (float)b / 255.0f;
 }
 
-void ws2812_setLED_Column(size_t inColumn, uint8_t r, uint8_t g, uint8_t b) {
+void ws2812_setLED_Column(color_f * inPanel, size_t inColumn, uint8_t r, uint8_t g, uint8_t b) {
 
     size_t lRowNum = ws2812_getLED_PanelNumberOfRows();
     size_t lRowCount;
 
     for(lRowCount = 0; lRowCount < lRowNum; lRowCount++) {
-        ws2812_setLED(lRowCount, inColumn, r, g, b);
+        ws2812_setLED(inPanel, lRowCount, inColumn, r, g, b);
     }
 }
 
-void ws2812_setLED_Row(size_t inRow, uint8_t r, uint8_t g, uint8_t b) {
+void ws2812_setLED_Row(color_f * inPanel, size_t inRow, uint8_t r, uint8_t g, uint8_t b) {
 
     size_t lColumnNum = ws2812_getLED_PanelNumberOfColumns();
     size_t lColumnCount;
 
     for(lColumnCount = 0; lColumnCount < lColumnNum; lColumnCount++) {
-        ws2812_setLED(inRow, lColumnCount, r, g, b);
+        ws2812_setLED(inPanel, inRow, lColumnCount, r, g, b);
     }
 }
 
-void ws2812_setLED_All(uint8_t r, uint8_t g, uint8_t b){
+void ws2812_setLED_All(color_f * inPanel, uint8_t r, uint8_t g, uint8_t b){
 
     size_t lRowCount;
     size_t lColumnCount;
 
-    for(lRowCount = 0; lRowCount < NR_ROWS; lRowCount++) {
-        for(lColumnCount = 0; lColumnCount < NR_COLUMNS; lColumnCount++) {
+    for(lRowCount = 0; lRowCount < WS2812_NR_ROWS; lRowCount++) {
+        for(lColumnCount = 0; lColumnCount < WS2812_NR_COLUMNS; lColumnCount++) {
 
             /* don't waste time if led is skipped */
             lColumnCount += isLedSkipped(lRowCount, lColumnCount);
 
-            if(lColumnCount < NR_COLUMNS) {
-                sLedPanel[lRowCount].mLeds[lColumnCount].R = (float)r / 255.0f;
-                sLedPanel[lRowCount].mLeds[lColumnCount].G = (float)g / 255.0f;
-                sLedPanel[lRowCount].mLeds[lColumnCount].B = (float)b / 255.0f;
+            if(lColumnCount < WS2812_NR_COLUMNS) {
+                inPanel[sLedPanel[lRowCount].mLeds + lColumnCount].R = (float)r / 255.0f;
+                inPanel[sLedPanel[lRowCount].mLeds + lColumnCount].G = (float)g / 255.0f;
+                inPanel[sLedPanel[lRowCount].mLeds + lColumnCount].B = (float)b / 255.0f;
             }
         }
     }
@@ -197,17 +196,12 @@ void ws2812_setLED_All(uint8_t r, uint8_t g, uint8_t b){
 
 size_t ws2812_getLED_PanelNumberOfRows(void) {
 
-    return NR_ROWS;
+    return WS2812_NR_ROWS;
 }
 
 size_t ws2812_getLED_PanelNumberOfColumns(void) {
 
-    return NR_COLUMNS;
-}
-
-void ws2812_getLED_Buffer(color_f ** outBuffer) {
-
-    *outBuffer = sLeds;
+    return WS2812_NR_COLUMNS;
 }
 
 void ws2812_init(void) {
@@ -404,15 +398,12 @@ void ws2812_init(void) {
     {
         size_t lRow;
 
-        for(lRow = 0; lRow < NR_ROWS; lRow++) {
+        for(lRow = 0; lRow < WS2812_NR_ROWS; lRow++) {
             sLedDMA[lRow].mDmaDoneSemaphore = xSemaphoreCreateCounting(1, 0);
             assert_param(sLedDMA[lRow].mDmaDoneSemaphore != NULL);
         }
     }
 #endif
-
-    ws2812_setLED_All(0,0,0);
-    ws2812_updateLED();
 }
 
 /*! start dma on timer 3 ch1 */
@@ -613,7 +604,7 @@ static void start_dma_t4_ch2(void) {
 typedef void (*f_start_dma)(void);
 
 /*! Function pointers to simplify launching of dmas */
-static f_start_dma s_start_dma_funcs[NR_ROWS] = {
+static f_start_dma s_start_dma_funcs[WS2812_NR_ROWS] = {
     start_dma_t3_ch1,
     start_dma_t4_ch1,
     start_dma_t3_ch3,
@@ -626,7 +617,7 @@ static f_start_dma s_start_dma_funcs[NR_ROWS] = {
 */
 static void start_dma(size_t inRow) {
 
-    assert_param(inRow < NR_ROWS);
+    assert_param(inRow < WS2812_NR_ROWS);
 
     s_start_dma_funcs[inRow]();
 }
@@ -650,7 +641,7 @@ static inline void fillBuffer(size_t inRow) {
     size_t lBitIndex;
     size_t lIndex;
 
-    assert_param(inRow < NR_ROWS);
+    assert_param(inRow < WS2812_NR_ROWS);
 
     /* avoid access to volatile variables */
     size_t lDmaBufferIndexCache = sLedDMA[inRow].mDmaBufferIndex;
@@ -668,12 +659,12 @@ static inline void fillBuffer(size_t inRow) {
         lIndex += isLedSkipped(inRow, lIndex);
 
         /* check if index is still in range */
-        if(lIndex < NR_COLUMNS) {
+        if(lIndex < WS2812_NR_COLUMNS) {
 
             color lColor;
-            lColor.R = (uint8_t)(255.0f * sLedPanel[inRow].mLeds[lIndex].R);
-            lColor.G = (uint8_t)(255.0f * sLedPanel[inRow].mLeds[lIndex].G);
-            lColor.B = (uint8_t)(255.0f * sLedPanel[inRow].mLeds[lIndex].B);
+            lColor.R = (uint8_t)(255.0f * sUpdatePanel[sLedPanel[inRow].mLeds + lIndex].R);
+            lColor.G = (uint8_t)(255.0f * sUpdatePanel[sLedPanel[inRow].mLeds + lIndex].G);
+            lColor.B = (uint8_t)(255.0f * sUpdatePanel[sLedPanel[inRow].mLeds + lIndex].B);
 
             /* decode colors to pwm duty cycles */
             for(lBitMask = 0x80, lBitIndex = 0; lBitMask != 0; lBitMask >>= 1, lBitIndex++) {
@@ -719,12 +710,14 @@ static inline void fillBuffer(size_t inRow) {
     sLedDMA[inRow].mDmaBufferIndex = incrementBufferIndex(lDmaBufferIndexCache);
 }
 
-void ws2812_updateLED(void){
+void ws2812_updateLED(color_f * inPanel){
 
     size_t lRow;
 
+    sUpdatePanel = inPanel;
+
     /* iterate over all rows */
-    for(lRow = 0; lRow < NR_ROWS; lRow++) {
+    for(lRow = 0; lRow < WS2812_NR_ROWS; lRow++) {
 
         /* initialize global variables */
         sLedDMA[lRow].mDmaBufferIndex = 0;
@@ -755,7 +748,7 @@ void ws2812_updateLED(void){
     }
 
 #if defined(WS2812_PARALLEL_ROW)
-    for(lRow = 0; lRow < NR_ROWS; lRow++) {
+    for(lRow = 0; lRow < WS2812_NR_ROWS; lRow++) {
 #if defined(WS2812_FREERTOS)
         /* wait on semaphore */
         xSemaphoreTake(sLedDMA[lRow].mDmaDoneSemaphore, portMAX_DELAY);
@@ -771,7 +764,7 @@ void ws2812_updateLED(void){
 static inline bool checkLastIndex(size_t inRow) {
 
     /* +2 adds 2*3*24 bits which corresponds to the end frame ~50us */
-    return sLedDMA[inRow].mDmaColumnIndex > (NR_COLUMNS + 2);
+    return sLedDMA[inRow].mDmaColumnIndex > (WS2812_NR_COLUMNS + 2);
 }
 
 /*! Handler for Tim3 CH1 DMA */

@@ -16,9 +16,6 @@ typedef struct {
     /*! constant color */
     color                   mColor;
 
-    /*! Re-draw */
-    bool                    mReDraw;
-
 } ts_ws2812_anim_const_color;
 
 

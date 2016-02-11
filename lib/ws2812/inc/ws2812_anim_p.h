@@ -5,19 +5,6 @@
 #include "FreeRTOS.h"   // for TickType_t
 
 
-/*! Switch animation
-
-*/
-void ws2812_animation_switch(void);
-
-
-/*! Execute one tick of animation
-
-    \return the number of ticks to delay before doing a new refresh
-*/
-TickType_t ws2812_animation_update(void);
-
-
 /*! Transition done
 
 */

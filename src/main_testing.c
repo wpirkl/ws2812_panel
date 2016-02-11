@@ -26,6 +26,9 @@
 
 #include "MQTTClient.h"
 
+
+
+
 /* place heap into ccm */
 uint8_t __attribute__ ((section(".ccmbss"), aligned(8))) ucHeap[ configTOTAL_HEAP_SIZE ];
 
@@ -70,9 +73,11 @@ void led_task(void * inParameters) {
     /* Initialize animation */
     ws2812_animation_init();
 
-
+#if 0
     /* power on test */
     {
+        static color_f lPanel[WS2812_NR_ROWS * WS2812_NR_COLUMNS];
+
         size_t lColumnNum = ws2812_getLED_PanelNumberOfColumns();
         size_t lColumnCount;
         size_t lPatternCount;
@@ -87,17 +92,17 @@ void led_task(void * inParameters) {
             for(lColumnCount = 0; lColumnCount < lColumnNum; lColumnCount++) {
                 switch(lColumnCount % 3) {
                     case 0:
-                        ws2812_setLED_Column(lColumnCount, lColor[0], lColor[1], lColor[2]);
+                        ws2812_setLED_Column(lPanel, lColumnCount, lColor[0], lColor[1], lColor[2]);
                         break;
                     case 1:
-                        ws2812_setLED_Column(lColumnCount, lColor[2], lColor[0], lColor[1]);
+                        ws2812_setLED_Column(lPanel, lColumnCount, lColor[2], lColor[0], lColor[1]);
                         break;
                     case 2:
-                        ws2812_setLED_Column(lColumnCount, lColor[1], lColor[2], lColor[0]);
+                        ws2812_setLED_Column(lPanel, lColumnCount, lColor[1], lColor[2], lColor[0]);
                         break;
                 }
             }
-            ws2812_updateLED();
+            ws2812_updateLED(lPanel);
             lColor[lPatternCount] = 0;
 
             vTaskDelay(2000);       /* delay 2 seconds */
@@ -105,33 +110,34 @@ void led_task(void * inParameters) {
 
 
         /* turn all leds off */
-        ws2812_setLED_All(0, 0, 0);
-        ws2812_updateLED();
+        ws2812_setLED_All(lPanel, 0, 0, 0);
+        ws2812_updateLED(lPanel);
 
         vTaskDelay(1000);
 
         for(lColumnCount = 0; lColumnCount < lColumnNum; lColumnCount++) {
             
             if(lColumnCount > 0) {
-                ws2812_setLED_Column(lColumnCount-1, 0, 0, 0);
+                ws2812_setLED_Column(lPanel, lColumnCount-1, 0, 0, 0);
             }
-            ws2812_setLED_Column(lColumnCount, 255, 255, 255);
+            ws2812_setLED_Column(lPanel, lColumnCount, 255, 255, 255);
             
-            ws2812_updateLED();
+            ws2812_updateLED(lPanel);
         }
-        ws2812_setLED_Column(lColumnCount-1, 0, 0, 0);
-        ws2812_updateLED();
+        ws2812_setLED_Column(lPanel, lColumnCount-1, 0, 0, 0);
+        ws2812_updateLED(lPanel);
         
         for(lCount = 0, lColumnCount = lColumnNum - 1; lCount < lColumnNum; lCount++, lColumnCount--) {
             if(lCount > 0) {
-                ws2812_setLED_Column(lColumnCount+1, 0, 0, 0);
+                ws2812_setLED_Column(lPanel, lColumnCount+1, 0, 0, 0);
             }
-            ws2812_setLED_Column(lColumnCount, 255, 255, 255);
-            ws2812_updateLED();
+            ws2812_setLED_Column(lPanel, lColumnCount, 255, 255, 255);
+            ws2812_updateLED(lPanel);
         }
-        ws2812_setLED_Column(0, 0, 0, 0);
-        ws2812_updateLED();
+        ws2812_setLED_Column(lPanel, 0, 0, 0, 0);
+        ws2812_updateLED(lPanel);
     }
+#endif
 
 #if 0
     {   /* LED test pattern */
@@ -218,8 +224,8 @@ void led_task(void * inParameters) {
                     break;
             }
 
-            ws2812_setLED_All(lRed,lGreen,lBlue);
-            ws2812_updateLED();
+            ws2812_setLED_All(lPanel,lRed,lGreen,lBlue);
+            ws2812_updateLED(lPanel);
         }
     }
 #else
@@ -229,6 +235,7 @@ void led_task(void * inParameters) {
 #endif
 }
 
+#if 0
 void esp8266_test_task(void * inParameters) {
 
     uint8_t lBuffer[128];
@@ -263,6 +270,7 @@ void esp8266_test_task(void * inParameters) {
         }
     }
 }
+#endif
 
 void esp8266_test_server_handler_task(ts_esp8266_socket * inSocket) {
 
@@ -300,6 +308,7 @@ void esp8266_socket_task(void * inParameters) {
     }
 }
 
+#if 0
 void esp8266_task(void * inParameters) {
 
     TaskHandle_t xHandle = NULL;
@@ -788,7 +797,7 @@ void esp8266_task(void * inParameters) {
         }
     }
 }
-
+#endif
 
 /*! HTTP server data */
 typedef struct {
@@ -1264,6 +1273,8 @@ void esp8266_mqtt_message_arrived(MessageData* data) {
 }
 */
 
+#if 0
+
 static const char sOn[]  = { 'O', 'N' };
 static const char sOff[] = { 'O', 'F', 'F' };
 
@@ -1431,6 +1442,7 @@ void esp8266_mqtt_task(void * inParameters) {
         }
     }
 }
+#endif
 
 int main(void) {
 
