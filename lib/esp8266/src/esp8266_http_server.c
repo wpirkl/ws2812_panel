@@ -178,8 +178,10 @@ static void esp8266_http_server_handler_task(ts_esp8266_socket * inSocket) {
                 break;
             }
         }
-
+    } else {
+        dbg_err("%s(%d): Malloc failed!\r\n", __FILE__, __LINE__);
     }
+
     free(lHttpServer.mBody);
     free(lHttpServer.mHeader);
 
