@@ -72,19 +72,22 @@ const uint8_t sAT_CIPSERVER[] = { 'A', 'T', '+', 'C', 'I', 'P', 'S', 'E', 'R', '
 
 const uint8_t sAT_PING[] = { 'A', 'T', '+', 'P', 'I', 'N', 'G' };
 
-const uint8_t sOK[]      = { '\r', '\n', 'O', 'K', '\r', '\n'};
-const uint8_t sERROR[]   = { '\r', '\n', 'E', 'R', 'R', 'O', 'R', '\r', '\n' };
-const uint8_t sFAIL[]    = { '\r', '\n', 'F', 'A', 'I', 'L', '\r', '\n' };
-const uint8_t sREADY[]   = { 'r', 'e', 'a', 'd', 'y', '\r', '\n' };
-const uint8_t sTCP[]     = { 'T', 'C', 'P' };
-const uint8_t sOK_SEND[] = { '\r', '\n', 'O', 'K', '\r', '\n', '>', ' ' };
-const uint8_t sSEND_OK[] = { '\r', '\n', 'S', 'E', 'N', 'D', ' ', 'O', 'K', '\r', '\n' };
+const uint8_t sOK[]        = { '\r', '\n', 'O', 'K', '\r', '\n'};
+const uint8_t sERROR[]     = { '\r', '\n', 'E', 'R', 'R', 'O', 'R', '\r', '\n' };
+const uint8_t sFAIL[]      = { '\r', '\n', 'F', 'A', 'I', 'L', '\r', '\n' };
+const uint8_t sREADY[]     = { 'r', 'e', 'a', 'd', 'y', '\r', '\n' };
+const uint8_t sTCP[]       = { 'T', 'C', 'P' };
+const uint8_t sOK_SEND[]   = { '\r', '\n', 'O', 'K', '\r', '\n', '>', ' ' };
+const uint8_t sSEND_OK[]   = { '\r', '\n', 'S', 'E', 'N', 'D', ' ', 'O', 'K', '\r', '\n' };
+const uint8_t sSEND_FAIL[] = { 'S', 'E', 'N', 'D', ' ', 'F', 'A', 'I', 'L', '\r', '\n' };
+const uint8_t sBUSY_S[]    = { '\r', '\n', 'b', 'u', 's', 'y', ' ', 's', '.', '.', '.', '\r', '\n' };
 
 const uint8_t sALREADY_CON[] = { 'A', 'L', 'R', 'E', 'A', 'D', 'Y', ' ', 'C', 'O', 'N', 'N', 'E', 'C', 'T', 'E', 'D', '\r', '\n' };
 
-const uint8_t sIPD[]     = { '\r', '\n', '+', 'I', 'P', 'D', ',' };
-const uint8_t sCONNECT[] = { ',', 'C', 'O', 'N', 'N', 'E', 'C', 'T', '\r', '\n' };
-const uint8_t sCLOSED[]  = { ',', 'C', 'L', 'O', 'S', 'E', 'D', '\r', '\n' };
+const uint8_t sIPD[]          = { '\r', '\n', '+', 'I', 'P', 'D', ',' };
+const uint8_t sCONNECT[]      = { ',', 'C', 'O', 'N', 'N', 'E', 'C', 'T', '\r', '\n' };
+const uint8_t sCLOSED[]       = { ',', 'C', 'L', 'O', 'S', 'E', 'D', '\r', '\n' };
+const uint8_t sCONNECT_FAIL[] = { ',', 'C', 'O', 'N', 'N', 'E', 'C', 'T', ' ', 'F', 'A', 'I', 'L', '\r', '\n' };
 
 const uint8_t sWIFI_DIS[] = { 'W', 'I', 'F', 'I', ' ', 'D', 'I', 'S', 'C', 'O', 'N', 'N', 'E', 'C', 'T', '\r', '\n' };
 const uint8_t sWIFI_CON[] = { 'W', 'I', 'F', 'I', ' ', 'C', 'O', 'N', 'N', 'E', 'C', 'T', 'E', 'D', '\r', '\n' };
@@ -142,7 +145,8 @@ struct s_esp8266_socket {
 /*! Defines a socket command */
 typedef enum e_esp8266_socket_cmd {
     ESP8266_SOCKET_OPEN,
-    ESP8266_SOCKET_CLOSE
+    ESP8266_SOCKET_CLOSE,
+    ESP8266_SOCKET_CONNECT_FAIL,
 } te_esp8266_socket_cmd;
 
 /*! Defines a socket command object */
@@ -153,7 +157,22 @@ typedef struct s_esp8266_socket_cmd {
 
     /*! The socket ID */
     size_t                  mSocket;
+
 } ts_esp8266_socket_cmd;
+
+typedef enum e_esp8266_wifi_cmd {
+    ESP8266_WIFI_CONNECTED,
+    ESP8266_WIFI_GOT_IP,
+    ESP8266_WIFI_DISCONNECT,
+} te_esp8266_wifi_cmd;
+
+/*! Defines a wifi command object */
+typedef struct s_esp8266_wifi_cmd {
+
+    /*! The command to execute */
+    te_esp8266_wifi_cmd     mCommand;
+
+} ts_esp8266_wifi_cmd;
 
 /*! Defines the esp8266 object
 */
@@ -167,6 +186,9 @@ typedef struct s_esp8266 {
 
     /*! Socket command queue */
     QueueHandle_t               mSocketCmdQ;
+
+    /*! Wifi command queue */
+    QueueHandle_t               mWIFICmdQ;
 
     /*! Mutex to allow only one caller at a time -- I/O related */
     SemaphoreHandle_t           mMutex;
@@ -205,6 +227,9 @@ typedef struct s_esp8266 {
 
     /*! Multiple TCP connections */
     bool                        mMultipleConnections;
+
+    /*! Wifi Mode */
+    te_esp8266_wifi_mode        mWifiMode;
 
     /*! Server handler */
     t_esp8266_server_handler    mServerHandler;
@@ -255,6 +280,12 @@ void esp8266_init(void) {
         sEsp8266.mSocketCmdQ = xQueueCreate(ESP8266_MAX_CONNECTIONS * 2, sizeof(ts_esp8266_socket_cmd));
         if(!sEsp8266.mSocketCmdQ) {
             dbg_err("%s(%d): sEsp8266.mSocketCmdQ is NULL\r\n", __FILE__, __LINE__);
+        }
+
+        /* 3 commands possibls */
+        sEsp8266.mWIFICmdQ = xQueueCreate(4, sizeof(ts_esp8266_wifi_cmd));
+        if(!sEsp8266.mWIFICmdQ) {
+            dbg_err("%s(%d): sEsp8266.mWIFICmdQ is NULL\r\n", __FILE__, __LINE__);
         }
 
         for(lCount = 0; lCount < ESP8266_MAX_CONNECTIONS; lCount++) {
@@ -319,6 +350,26 @@ STATIC void esp8266_server_handler_task(void * inParameters) {
 
     /* delete this task */
     vTaskDelete(NULL);
+}
+
+/*! Cleanup socket
+
+    This function requires mutex protection
+
+    \param[in]  inSocket    Socket to clean-up
+*/
+STATIC void esp8266_socket_cleanup(ts_esp8266_socket * inSocket) {
+
+    size_t lCount;
+
+    inSocket->mUsed = false;
+    inSocket->mHead = 0;
+    inSocket->mTail = 0;
+
+    for(lCount = 0; lCount < ESP8266_MAX_CHANNEL_RCV_CNT; lCount++) {
+        inSocket->mRxBuffer[lCount].mLength = 0;
+        inSocket->mRxBuffer[lCount].mIndex = 0;
+    }
 }
 
 /*! This function handles asynchronous incoming data
@@ -416,29 +467,55 @@ STATIC bool esp8266_rx_handle_ipd(void) {
 */
 STATIC bool esp8266_rx_handle_wifi(void) {
 
+
     if(usart_dma_peek(sWIFI_DIS, sizeof(sWIFI_DIS))) {
+
+        ts_esp8266_wifi_cmd lWifiCommand = {
+            .mCommand = ESP8266_WIFI_DISCONNECT,
+        };
 
         dbg("%s(%d): Wifi disconnected\r\n", __FILE__, __LINE__);
         usart_dma_rx_skip(sizeof(sWIFI_DIS));
+
+        if(!xQueueSend(sEsp8266.mWIFICmdQ, &lWifiCommand, 1000 / portTICK_PERIOD_MS)) {
+            dbg_err("%s(%d): sending to queue failed!\r\n", __FILE__, __LINE__);
+        }
 
         return true;
     }
 
     if(usart_dma_peek(sWIFI_CON, sizeof(sWIFI_CON))) {
 
+        ts_esp8266_wifi_cmd lWifiCommand = {
+            .mCommand = ESP8266_WIFI_CONNECTED,
+        };
+
         dbg("%s(%d): Wifi connected\r\n", __FILE__, __LINE__);
         usart_dma_rx_skip(sizeof(sWIFI_CON));
+
+        if(!xQueueSend(sEsp8266.mWIFICmdQ, &lWifiCommand, 1000 / portTICK_PERIOD_MS)) {
+            dbg_err("%s(%d): sending to queue failed!\r\n", __FILE__, __LINE__);
+        }
 
         return true;
     }
 
     if(usart_dma_peek(sWIFI_IP, sizeof(sWIFI_IP))) {
 
+        ts_esp8266_wifi_cmd lWifiCommand = {
+            .mCommand = ESP8266_WIFI_GOT_IP,
+        };
+
         dbg("%s(%d): Wifi got IP\r\n", __FILE__, __LINE__);
         usart_dma_rx_skip(sizeof(sWIFI_IP));
 
+        if(!xQueueSend(sEsp8266.mWIFICmdQ, &lWifiCommand, 1000 / portTICK_PERIOD_MS)) {
+            dbg_err("%s(%d): sending to queue failed!\r\n", __FILE__, __LINE__);
+        }
+
         return true;
     }
+
     return false;
 }
 
@@ -563,6 +640,62 @@ STATIC bool esp8266_rx_handle_socket(void) {
 
 //        dbg("%s(%d): %s treated\r\n", __FILE__, __LINE__, __func__);
         return true;
+    }
+
+    if(usart_dma_peek_skip(sCONNECT_FAIL, sizeof(sCONNECT_FAIL), 1)) {
+
+        uint8_t lChannel = '0';
+
+#if 0
+        /* WEP: Warning, this could remove data which is needed elsewhere */
+        if(lLen > sizeof(sCLOSED) + 1) {
+
+            uint8_t lBuffer[32];
+            size_t lBufferLen;
+            size_t lReadLen;
+
+            dbg_err("%s(%d): WARNING! Skipping %d unhandled bytes\r\n", __FILE__, __LINE__, lLen - (sizeof(sCONNECT_FAIL) + 1));
+            //usart_dma_rx_skip(lLen - (sizeof(sCONNECT_FAIL) + 1));  /* skip what's before the match */
+
+            if(sizeof(lBuffer)-1 < lLen - (sizeof(sCONNECT_FAIL) + 1)) {
+                lReadLen = sizeof(lBuffer)-1;
+            } else {
+                lReadLen = lLen - (sizeof(sCONNECT_FAIL) + 1);
+            }
+            lBufferLen = usart_dma_read(lBuffer, lReadLen);
+            usart_dma_rx_skip(lLen - (sizeof(sCONNECT_FAIL) + 1 + lReadLen));
+
+            lBuffer[lBufferLen] = '\0';
+            dbg_err("%s(%d): skipped content: \"%s\"\r\n", __FILE__, __LINE__, lBuffer);
+        }
+#endif
+        usart_dma_read(&lChannel, 1);           /* read the channel */
+        usart_dma_rx_skip(sizeof(sCONNECT_FAIL));     /* skip the rest */
+
+        lChannel -= '0';
+
+//        dbg("%s(%d): Socket is: %d\r\n", __FILE__, __LINE__, lChannel);
+
+        if(lChannel < ESP8266_MAX_CONNECTIONS) {
+
+            ts_esp8266_socket_cmd lSocketCommand = {
+                .mCommand = ESP8266_SOCKET_CONNECT_FAIL,
+                .mSocket = lChannel
+            };
+
+//          dbg("%s(%d): %d,CLOSED\r\n", __func__, __LINE__, lChannel);
+
+            if(!xQueueSend(sEsp8266.mSocketCmdQ, &lSocketCommand, 1000 / portTICK_PERIOD_MS)) {
+                dbg_err("%s(%d): sending to queue failed!\r\n", __FILE__, __LINE__);
+            }
+
+            dbg("%s(%d): Closing socket %p\r\n", __FILE__, __LINE__, &sEsp8266.mSockets[lChannel]);
+
+        } else {
+            dbg_err("%s(%d): Socket %d is too big!\r\n", __FILE__, __LINE__, lChannel);
+        }
+
+//        dbg("%s(%d): %s treated\r\n", __FILE__, __LINE__, __func__);
     }
 
     return false;
@@ -694,13 +827,13 @@ void esp8266_rx_handler(void) {
 #if defined(ESP8266_FREERTOS)
     for(;usart_dma_rx_num() == sEsp8266.mTreated && !sEsp8266.mForcedRefresh;) {
 
-        dbg("%s(%d): going to sleep %d bytes left in buffer\r\n", __FILE__, __LINE__, usart_dma_rx_num());
-
 #if 0
         if(usart_dma_rx_num() > 0) {   /* peek what's in the buffer */
 
             uint8_t lDbgBuffer[64];
             size_t lDbgLen;
+
+            dbg_err("%s(%d): going to sleep %d bytes left in buffer\r\n", __FILE__, __LINE__, usart_dma_rx_num());
 
             lDbgLen = usart_dma_read_peek(lDbgBuffer, sizeof(lDbgBuffer)-1);
             lDbgBuffer[lDbgLen] = '\0';
@@ -772,10 +905,10 @@ void esp8266_socket_handler(void) {
                 }
                 break;
             case ESP8266_SOCKET_CLOSE:
-            default: {
+            case ESP8266_SOCKET_CONNECT_FAIL: {
 
                     /* unmark the socket from being used */
-                    sEsp8266.mSockets[lSocketCommand.mSocket].mUsed = false;
+                    esp8266_socket_cleanup(&sEsp8266.mSockets[lSocketCommand.mSocket]);
 
                     /* notify everybody who's waiting on the socket */
                     xSemaphoreGive(sEsp8266.mSockets[lSocketCommand.mSocket].mRxSemaphore);
@@ -793,6 +926,40 @@ void esp8266_socket_handler(void) {
         }
     } else {
         dbg_err("%s(%d): timeout waitng on socket command\r\n", __FILE__, __LINE__);
+    }
+}
+
+void esp8266_wifi_connection_handler(void) {
+
+    ts_esp8266_wifi_cmd lWifiCommand;
+
+    /* timeout every 10 seconds */
+    if(xQueueReceive(sEsp8266.mWIFICmdQ, &lWifiCommand, portMAX_DELAY /* 10000 / portTICK_PERIOD_MS*/)) {
+
+        switch(lWifiCommand.mCommand) {
+            case ESP8266_WIFI_CONNECTED:
+                break;
+            case ESP8266_WIFI_GOT_IP:
+                break;
+            case ESP8266_WIFI_DISCONNECT:
+
+                /*
+                    if ESP8266 is in station + ap mode, loosing it's station connection will
+                    make the AP unusable!
+
+                    So on disconnect, we'll disable the station and regularely try to re-enable
+                */
+                if(sEsp8266.mWifiMode == ESP8266_WIFI_MODE_STA_AP) {
+
+                    if(!esp8266_cmd_cwqap()) {
+                        dbg_err("%s(%d): Could not quit access point!\r\n", __FILE__, __LINE__);
+                    }
+                }
+
+                break;
+        }
+    } else {
+        dbg_err("%s(%d): timeout waiting on wifi command\r\n", __FILE__, __LINE__);
     }
 }
 
@@ -1092,6 +1259,8 @@ bool esp8266_cmd_set_cwmode_cur(te_esp8266_wifi_mode inWifiMode) {
             return false;
     }
 
+    sEsp8266.mWifiMode = inWifiMode;
+
     return esp8266_ok_cmd(lCommandBuffer, lLen, 1000);
 }
 
@@ -1135,6 +1304,8 @@ bool esp8266_cmd_get_cwmode_cur(te_esp8266_wifi_mode * outWifiMode) {
 
             return false;
         }
+
+        sEsp8266.mWifiMode = *outWifiMode;
 
         return true;
     } else {
@@ -1719,8 +1890,8 @@ bool esp8266_cmd_cipclose(ts_esp8266_socket * inSocket) {
 
         if(inSocket->mUsed) {
 
-            /* mark it as unused */
-            inSocket->mUsed = false;
+            /* clean this socket up */
+            esp8266_socket_cleanup(inSocket);
 
             memcpy(lCommandBuffer, sAT_CIPCLOSE, sizeof(sAT_CIPCLOSE));
             if(sEsp8266.mMultipleConnections) {         /* \todo this has to be mutex protected, until the command sending */
@@ -1965,6 +2136,25 @@ bool esp8266_cmd_cipsend_tcp(ts_esp8266_socket * inSocket, uint8_t * inBuffer, s
 
                         } else if(sEsp8266.mStatus == ESP8266_OK) {
 
+                            {   /* WEP: catch busy s... */
+
+                                sEsp8266.mStatus = ESP8266_IN_PROGRESS;
+
+                                /* set the sentinel to busy s... */
+                                esp8266_set_sentinel(sBUSY_S, sizeof(sBUSY_S), NULL, 0);
+
+                                /* set the response buffer */
+                                esp8266_set_response_buffer(NULL, 0);
+
+                                /* re-request the rx handler */
+                                esp8266_request_rx_handler_refresh();
+
+                                /* receive and clear it ... */
+                                if(!xSemaphoreTake(sEsp8266.mResponseSema, 100 / portTICK_PERIOD_MS)) {
+                                    esp8266_set_sentinel(NULL, 0, NULL, 0);
+                                }
+                            }
+
                             dbg("%s(%d): request ok / err\r\n", __FILE__, __LINE__);
 
                             /* now wait for OK / ERROR */
@@ -1979,9 +2169,13 @@ bool esp8266_cmd_cipsend_tcp(ts_esp8266_socket * inSocket, uint8_t * inBuffer, s
                             /* should find sSEND_OK */
                             esp8266_request_rx_handler_refresh();
 
-                            if(!xSemaphoreTake(sEsp8266.mResponseSema, 5000 / portTICK_PERIOD_MS)) {
+                            if(!xSemaphoreTake(sEsp8266.mResponseSema, 4000 / portTICK_PERIOD_MS)) {
 
-                                esp8266_set_sentinel(NULL, 0, NULL, 0);
+                                /* get 'SEND FAIL' out of the buffer */
+                                esp8266_set_sentinel(NULL, 0, sSEND_FAIL, sizeof(sSEND_FAIL));
+                                esp8266_request_rx_handler_refresh();
+                                xSemaphoreTake(sEsp8266.mResponseSema, 100 / portTICK_PERIOD_MS);
+
                                 sEsp8266.mStatus = ESP8266_TIMEOUT;
                                 dbg_err("%s(%d): Timeout\r\n", __FILE__, __LINE__);
 

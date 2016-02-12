@@ -308,6 +308,13 @@ void esp8266_socket_task(void * inParameters) {
     }
 }
 
+void esp8266_wifi_task(void * inParameters) {
+
+    for(;;) {
+        esp8266_wifi_connection_handler();
+    }
+}
+
 #if 0
 void esp8266_task(void * inParameters) {
 
@@ -332,6 +339,14 @@ void esp8266_task(void * inParameters) {
         printf("Successfully started RX Task\r\n");
     } else {
         printf("Failed starting RX Task\r\n");
+    }
+
+    /* create wifi task */
+    lRetVal = xTaskCreate(esp8266_wifi_task, ( const char * )"esp8266_wi", configMINIMAL_STACK_SIZE * 4, NULL, configMAX_PRIORITIES - 2, &xHandle);
+    if(lRetVal) {
+        printf("Successfully started Wifi Task %p\r\n", xHandle);
+    } else {
+        printf("Failed starting Wifi Task\r\n");
     }
 
     vTaskDelay(1000);
@@ -1044,6 +1059,16 @@ void esp8266_http_test_web_content_done_parse(void * inUserData) {
             printf("Success!\r\n");
         } else {
             printf("Failed!\r\n");
+
+            /* reset STA + AP */
+            {   /* set station mode */
+                printf("Set WIFI Mode to %d... ", ESP8266_WIFI_MODE_AP);
+                if(esp8266_cmd_set_cwmode_cur(ESP8266_WIFI_MODE_AP)) {
+                    printf("Success!\r\n");
+                } else {
+                    printf("Failed!\r\n");
+                }
+            }
         }
 
         /* clear ssid received */
@@ -1174,6 +1199,14 @@ void esp8266_http_test(void * inParameters) {
         printf("Failed starting Socket Task\r\n");
     }
 
+    // /* create wifi task */
+    lRetVal = xTaskCreate(esp8266_wifi_task, ( const char * )"esp8266_wi", configMINIMAL_STACK_SIZE * 4, NULL, configMAX_PRIORITIES - 2, &xHandle);
+    if(lRetVal) {
+        printf("Successfully started Wifi Task %p\r\n", xHandle);
+    } else {
+        printf("Failed starting Wifi Task\r\n");
+    }
+
     vTaskDelay(1000);
 
     {   /* Reset */
@@ -1204,8 +1237,8 @@ void esp8266_http_test(void * inParameters) {
     }
 
     {   /* set station mode */
-        printf("Set WIFI Mode to %d... ", ESP8266_WIFI_MODE_AP /* ESP8266_WIFI_MODE_STA_AP */);
-        if(esp8266_cmd_set_cwmode_cur(ESP8266_WIFI_MODE_AP /* ESP8266_WIFI_MODE_STA_AP */)) {
+        printf("Set WIFI Mode to %d... ", /* ESP8266_WIFI_MODE_AP */ ESP8266_WIFI_MODE_STA_AP);
+        if(esp8266_cmd_set_cwmode_cur(/*ESP8266_WIFI_MODE_AP */ ESP8266_WIFI_MODE_STA_AP)) {
             printf("Success!\r\n");
         } else {
             printf("Failed!\r\n");
@@ -1320,6 +1353,14 @@ void esp8266_mqtt_task(void * inParameters) {
         printf("Successfully started Socket Task %p\r\n", xHandle);
     } else {
         printf("Failed starting Socket Task\r\n");
+    }
+
+    /* create wifi task */
+    lRetVal = xTaskCreate(esp8266_wifi_task, ( const char * )"esp8266_wi", configMINIMAL_STACK_SIZE * 4, NULL, configMAX_PRIORITIES - 2, &xHandle);
+    if(lRetVal) {
+        printf("Successfully started Wifi Task %p\r\n", xHandle);
+    } else {
+        printf("Failed starting Wifi Task\r\n");
     }
 
     vTaskDelay(1000);
