@@ -62,6 +62,30 @@ Recv:
 ATE0\r\r\n\r\nOK\r\n
 ```
 
+Sent:
+```
+AT+CWAUTOCONN?\r\n
+```
+
+Recv:
+```
+AT+CWAUTOCONN?\r\r\n
++CWAUTOCONN:1\r\n
+OK\r\n
+```
+
+Sent:
+```
+AT+CWAUTOCONN=0\r\n
+```
+
+Recv:
+```
+AT+CWAUTOCONN=0\r\r\n
+\r\nOK\r\n
+```
+
+
 ### Without echo
 
 Sent:
