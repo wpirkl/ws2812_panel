@@ -1415,7 +1415,7 @@ bool esp8266_cmd_cwqap(void) {
     return esp8266_ok_cmd(sAT_CWQAP, sizeof(sAT_CWQAP), 1000);
 }
 
-bool esp8266_cmd_set_cwsap_cur(uint8_t * inSSID, size_t inSSIDLen, uint8_t * inPWD, size_t inPWDLen, uint8_t inChannel, te_esp8266_encryption_mode inEncryption) {
+bool esp8266_cmd_set_cwsap_cur(const uint8_t * const inSSID, const size_t inSSIDLen, const uint8_t * const inPWD, const size_t inPWDLen, const uint8_t inChannel, const te_esp8266_encryption_mode inEncryption) {
 
     uint8_t lCommandBuffer[sizeof(sAT_CWSAP) + sizeof(sCUR) + 1 + 1 + 31 + 1 + 1 + 1 + 64 + 1 + 1 + 2 + 1 + 1];    /* command length + equal + quote + ssid + quote + comma + quote + password lenght + quote + comma + channel + comma + enc mode */
     size_t  lLen;

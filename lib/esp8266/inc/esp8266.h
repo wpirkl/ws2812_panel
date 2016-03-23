@@ -3,7 +3,7 @@
 
 #include <stdint.h>
 #include <stdbool.h>
-
+#include <stddef.h>
 
 /*! Defines return of a command */
 typedef enum {
@@ -220,7 +220,7 @@ bool esp8266_cmd_cwqap(void);
     \retval true    Successful completion
     \retval false   Failed
 */
-bool esp8266_cmd_set_cwsap_cur(uint8_t * inSSID, size_t inSSIDLen, uint8_t * inPWD, size_t inPWDLen, uint8_t inChannel, te_esp8266_encryption_mode inEncryption);
+bool esp8266_cmd_set_cwsap_cur(const uint8_t * const inSSID, const size_t inSSIDLen, const uint8_t * const inPWD, const size_t inPWDLen, const uint8_t inChannel, const te_esp8266_encryption_mode inEncryption);
 
 
 /*! Get esp9266 soft ap mode

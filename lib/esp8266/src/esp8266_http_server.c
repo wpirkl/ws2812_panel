@@ -133,9 +133,9 @@ static bool esp8266_http_handle_get(ts_http_server * inHttpServer);
 static bool esp8266_http_handle_post(ts_http_server * inHttpServer);
 
 
-bool esp8266_http_server_start(void) {
+bool esp8266_http_server_start(uint32_t inServerTaskPriority) {
 
-    return esp8266_cmd_cipserver(80, esp8266_http_server_handler_task, configMAX_PRIORITIES - 4, configMINIMAL_STACK_SIZE * 6);
+    return esp8266_cmd_cipserver(80, esp8266_http_server_handler_task, inServerTaskPriority, configMINIMAL_STACK_SIZE * 6);
 }
 
 
@@ -385,11 +385,16 @@ static bool esp8266_http_send_reply(ts_http_server * inHttpServer, const ts_web_
         if(web_content_is_cachable(inContent)) {
 
             inHttpServer->mHeaderSize += snprintf((char*)&inHttpServer->mHeader[inHttpServer->mHeaderSize], HTTP_HEADER_SIZE - inHttpServer->mHeaderSize,
-                                                  "cache-control: private, max-age=604800\r\n");
+                                                  "Cache-Control: private, max-age=604800\r\n");
         } else {
 
             inHttpServer->mHeaderSize += snprintf((char*)&inHttpServer->mHeader[inHttpServer->mHeaderSize], HTTP_HEADER_SIZE - inHttpServer->mHeaderSize,
                                                   "Cache-control: no-cache\r\n");
+        }
+
+        if(web_content_is_compressed(inContent)) {
+            inHttpServer->mHeaderSize += snprintf((char*)&inHttpServer->mHeader[inHttpServer->mHeaderSize], HTTP_HEADER_SIZE - inHttpServer->mHeaderSize,
+                                                  "Content-Encoding: gzip\r\n");
         }
 
         if(lChunkedTransfer) {

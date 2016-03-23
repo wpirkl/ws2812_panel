@@ -7,6 +7,7 @@
 #include "web_content.h"
 
 
+
 /*! Handler for one token */
 typedef struct {
 
@@ -43,11 +44,7 @@ typedef struct {
 } ts_web_content_handlers;
 
 
-/*! Set web content handlers
-
-    \param[in]  inWebContentHandlers    The web content handlers
-*/
-void web_content_set_handlers(const ts_web_content_handlers * inWebContentHandlers);
+extern const ts_web_content_handlers g_WebContentHandler __attribute__((weak));
 
 
 /*! Find a file in web content
@@ -131,6 +128,16 @@ bool web_content_parse_url_encoded_data(char * inURLEncodedData, size_t inURLEnc
     \retval false   Not cacheable
 */
 bool web_content_is_cachable(const ts_web_content_file * inWebContent);
+
+
+/*! Check if a file is compressed
+
+    \param[in]  inWebContent    Pointer to a web content structure
+
+    \retval true    Compressed
+    \retval false   Not compressed
+*/
+bool web_content_is_compressed(const ts_web_content_file * inWebContent);
 
 
 #endif /* WEB_CONTENT_HANDLER_H_ */

@@ -74,23 +74,40 @@ typedef enum {
     URL_PARSER_VALUE,
 } te_url_parser_state;
 
-/*! Stores the web content handlers */
-static const ts_web_content_handlers * sWebContentHandlers = NULL;
-
-
-void web_content_set_handlers(const ts_web_content_handlers * inWebContentHandlers) {
-
-    sWebContentHandlers = inWebContentHandlers;
-}
-
+const char sWebContentCompressedExtension[] = "gz";
 
 bool web_content_find_file(uint8_t * inFilename, size_t inFilenameLen, const ts_web_content_file ** outWebContent) {
 
     size_t lCount;
+    size_t lFileEndingCount;
+    size_t lIndex = 0;
+    size_t lLength = 0;
 
     for(lCount = 0; lCount < gWebContent.mFileCount; lCount++) {
 
-        if(gWebContent.mFiles[lCount].mFilenameLen == inFilenameLen && memcmp(inFilename, gWebContent.mFiles[lCount].mFileName, inFilenameLen) == 0) {
+        lIndex = 0;
+        lLength = gWebContent.mFiles[lCount].mFilenameLen;
+
+        for(lFileEndingCount = gWebContent.mFiles[lCount].mFilenameLen; lFileEndingCount > 0; lFileEndingCount--) {
+            if(gWebContent.mFiles[lCount].mFileName[lFileEndingCount-1] == '.') {
+
+                lIndex = lFileEndingCount;
+                lLength = gWebContent.mFiles[lCount].mFilenameLen - lIndex;
+
+                if(sizeof(sWebContentCompressedExtension) - 1 == lLength &&
+                   memcmp(&gWebContent.mFiles[lCount].mFileName[lIndex], sWebContentCompressedExtension, lLength) == 0) {
+
+                    /* it's gzip compressed, so lets remove the .gz ending */
+                    lLength = gWebContent.mFiles[lCount].mFilenameLen - (lLength + 1);
+                } else {
+                    /* it's not gzip compressed */
+                    lLength = gWebContent.mFiles[lCount].mFilenameLen;
+                }
+                break;
+            }
+        }
+
+        if(lLength == inFilenameLen && memcmp(inFilename, gWebContent.mFiles[lCount].mFileName, inFilenameLen) == 0) {
 
             *outWebContent = &gWebContent.mFiles[lCount];
             return true;
@@ -119,7 +136,6 @@ const ts_web_content_type sWebContentType[] = {
 //    { "ttc",  "application/x-font-ttf" }
 };
 
-
 te_web_content_type web_content_get_enum(const ts_web_content_file * inWebContent) {
 
     te_web_content_type lContentType = MIME_BIN;
@@ -127,12 +143,21 @@ te_web_content_type web_content_get_enum(const ts_web_content_file * inWebConten
     size_t lCount;
     size_t lIndex = 0;
     size_t lLength = 0;
+    size_t lLast = inWebContent->mFilenameLen;
 
     for(lCount = inWebContent->mFilenameLen; lCount > 0; lCount--) {
         if(inWebContent->mFileName[lCount-1] == '.') {
             lIndex = lCount;
-            lLength = inWebContent->mFilenameLen - lIndex;
-            break;
+            lLength = lLast - lIndex;
+
+            if(sizeof(sWebContentCompressedExtension) - 1 == lLength &&
+               memcmp(&inWebContent->mFileName[lIndex], sWebContentCompressedExtension, lLength) == 0) {
+
+                /* it's gzip compressed, so lets restart */
+                lLast = lCount - 1;
+            } else {
+                break;
+            }
         }
     }
 
@@ -164,6 +189,26 @@ bool web_content_is_cachable(const ts_web_content_file * inWebContent) {
 }
 
 
+bool web_content_is_compressed(const ts_web_content_file * inWebContent) {
+
+    size_t lCount;
+    size_t lIndex = 0;
+    size_t lLength = 0;
+    size_t lLast = inWebContent->mFilenameLen;
+
+    for(lCount = inWebContent->mFilenameLen; lCount > 0; lCount--) {
+        if(inWebContent->mFileName[lCount-1] == '.') {
+            lIndex = lCount;
+            lLength = lLast - lIndex;
+            break;
+        }
+    }
+
+    return sizeof(sWebContentCompressedExtension) - 1 == lLength &&
+           memcmp(&inWebContent->mFileName[lIndex], sWebContentCompressedExtension, lLength) == 0;
+}
+
+
 bool web_content_get_token_value(const char * const inToken, size_t inTokenLength, char * outBuffer, size_t inBufferSize, size_t * outBufferLen) {
 
     size_t lCount;
@@ -175,22 +220,22 @@ bool web_content_get_token_value(const char * const inToken, size_t inTokenLengt
     lBuffer[inTokenLength] = '\0';
     dbg("Got token: \"%s\"\r\n", lBuffer);
 
-    if(sWebContentHandlers) {
+    if(&g_WebContentHandler) {
 
-        for(lCount = 0; lCount < sWebContentHandlers->mHandlerCount; lCount++) {
+        for(lCount = 0; lCount < g_WebContentHandler.mHandlerCount; lCount++) {
 
-            size_t lCurrentTokenLen = strlen(sWebContentHandlers->mHandler[lCount].mToken);
+            size_t lCurrentTokenLen = strlen(g_WebContentHandler.mHandler[lCount].mToken);
 
             /* token found */
-            if(lCurrentTokenLen == inTokenLength && memcmp(sWebContentHandlers->mHandler[lCount].mToken, inToken, inTokenLength) == 0) {
+            if(lCurrentTokenLen == inTokenLength && memcmp(g_WebContentHandler.mHandler[lCount].mToken, inToken, inTokenLength) == 0) {
 
                 dbg("Token match!\r\n");
 
-                if(sWebContentHandlers->mHandler[lCount].mGet) {
+                if(g_WebContentHandler.mHandler[lCount].mGet) {
 
                     dbg("Handler is not null\r\n");
 
-                    return sWebContentHandlers->mHandler[lCount].mGet(sWebContentHandlers->mUserData, outBuffer, inBufferSize, outBufferLen);
+                    return g_WebContentHandler.mHandler[lCount].mGet(g_WebContentHandler.mUserData, outBuffer, inBufferSize, outBufferLen);
                 } else {
 
                     dbg("Handler is not registered\r\n");
@@ -210,18 +255,18 @@ bool web_gontent_set_token_value(const char * const inToken, size_t inTokenLengt
 
     size_t lCount;
 
-    if(sWebContentHandlers) {
+    if(&g_WebContentHandler) {
 
-        for(lCount = 0; lCount < sWebContentHandlers->mHandlerCount; lCount++) {
+        for(lCount = 0; lCount < g_WebContentHandler.mHandlerCount; lCount++) {
 
-            size_t lCurrentTokenLen = strlen(sWebContentHandlers->mHandler[lCount].mToken);
+            size_t lCurrentTokenLen = strlen(g_WebContentHandler.mHandler[lCount].mToken);
 
             /* token found */
-            if(lCurrentTokenLen == inTokenLength && memcmp(sWebContentHandlers->mHandler[lCount].mToken, inToken, inTokenLength) == 0) {
+            if(lCurrentTokenLen == inTokenLength && memcmp(g_WebContentHandler.mHandler[lCount].mToken, inToken, inTokenLength) == 0) {
 
-                if(sWebContentHandlers->mHandler[lCount].mSet) {
+                if(g_WebContentHandler.mHandler[lCount].mSet) {
 
-                    return sWebContentHandlers->mHandler[lCount].mSet(sWebContentHandlers->mUserData, inValue, inValueLength);
+                    return g_WebContentHandler.mHandler[lCount].mSet(g_WebContentHandler.mUserData, inValue, inValueLength);
                 } else {
 
                     /* no handler registered */
@@ -418,9 +463,9 @@ bool web_content_prepare_output(const ts_web_content_file * inWebContent, char *
 
 void web_content_notify_parsing_done(void) {
 
-    if(sWebContentHandlers) {
-        if(sWebContentHandlers->mParsingDone) {
-            sWebContentHandlers->mParsingDone(sWebContentHandlers->mUserData);
+    if(&g_WebContentHandler) {
+        if(g_WebContentHandler.mParsingDone) {
+            g_WebContentHandler.mParsingDone(g_WebContentHandler.mUserData);
         }
     }
 }
@@ -428,9 +473,9 @@ void web_content_notify_parsing_done(void) {
 
 void web_content_notify_parsing_start(void) {
 
-    if(sWebContentHandlers) {
-        if(sWebContentHandlers->mParsingStart) {
-            sWebContentHandlers->mParsingStart(sWebContentHandlers->mUserData);
+    if(&g_WebContentHandler) {
+        if(g_WebContentHandler.mParsingStart) {
+            g_WebContentHandler.mParsingStart(g_WebContentHandler.mUserData);
         }
     }
 }
