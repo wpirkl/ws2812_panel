@@ -8,6 +8,8 @@
 #include "FreeRTOS.h"
 #include "task.h"
 
+#include "task_priorities.h"
+
 #include "stm32f4xx_gpio.h" // for GPIO_InitTypeDef, GPIO_Init, GPIO_ResetBits and GPIO_SetBits
 
 #include "usbd_cdc_vcp.h"   // for VCP_get_char
@@ -342,7 +344,7 @@ void esp8266_task(void * inParameters) {
     }
 
     /* create wifi task */
-    lRetVal = xTaskCreate(esp8266_wifi_task, ( const char * )"esp8266_wi", configMINIMAL_STACK_SIZE * 4, NULL, configMAX_PRIORITIES - 2, &xHandle);
+    lRetVal = xTaskCreate(esp8266_wifi_task, ( const char * )"esp8266_wi", configMINIMAL_STACK_SIZE * 2, NULL, configMAX_PRIORITIES - 2, &xHandle);
     if(lRetVal) {
         printf("Successfully started Wifi Task %p\r\n", xHandle);
     } else {
@@ -1096,7 +1098,7 @@ void esp8266_http_test_web_content_done_parse(void * inUserData) {
     xSemaphoreGiveRecursive(lUserData->mMutex);
 }
 
-static const ts_web_content_handlers sTestWebContent = {
+const ts_web_content_handlers g_WebContentHandler = {
 
     .mHandlerCount = 10,
     .mParsingStart = esp8266_http_test_web_content_start_parse,
@@ -1192,7 +1194,7 @@ void esp8266_http_test(void * inParameters) {
     }
 
     /* create socket task */
-    lRetVal = xTaskCreate(esp8266_socket_task, ( const char * )"esp8266_so", configMINIMAL_STACK_SIZE, NULL, configMAX_PRIORITIES - 2, &xHandle);
+    lRetVal = xTaskCreate(esp8266_socket_task, ( const char * )"esp8266_so", configMINIMAL_STACK_SIZE * 2, NULL, configMAX_PRIORITIES - 2, &xHandle);
     if(lRetVal) {
         printf("Successfully started Socket Task %p\r\n", xHandle);
     } else {
@@ -1273,21 +1275,16 @@ void esp8266_http_test(void * inParameters) {
         printf("PASS: \"%s\"\r\n", lPWDBuffer);
 
         printf("Setting Access Point... ");
-        if(esp8266_cmd_set_cwsap_cur(lSSIDBuffer, lSSIDBufferLen, lPWDBuffer, lPWDBufferLen, 11, ESP8266_ENC_MODE_WPA2_PSK)) {
+        if(esp8266_cmd_set_cwsap_cur(lSSIDBuffer, lSSIDBufferLen, lPWDBuffer, lPWDBufferLen, 11, ESP8266_ENC_MODE_WPA_WPA2_PSK)) {
             printf("Success!\r\n");
         } else {
             printf("Failed!\r\n");
         }
     }
 
-    {   /* set web content handlers */
-        printf("Set web content handlers\r\n");
-        web_content_set_handlers(&sTestWebContent);
-    }
-
     {   /* start http server */
         printf("Start HTTP server\r\n");
-        esp8266_http_server_start();
+        esp8266_http_server_start(ESP8266_HTTP_SERVER_PRIORITY);
     }
 
     /* delete this task */
@@ -1490,7 +1487,7 @@ int main(void) {
     init();
 
     {   /* create tasks */
-        xTaskCreate(led_task,          ( const char * )"led",          configMINIMAL_STACK_SIZE *  8, NULL, configMAX_PRIORITIES - 2, NULL);
+        xTaskCreate(led_task,          ( const char * )"led",          configMINIMAL_STACK_SIZE *  8, NULL, LED_TASK_PRIORITY, NULL);
 //        xTaskCreate(esp8266_mqtt_task, ( const char * )"esp8266_mqtt", configMINIMAL_STACK_SIZE * 32, NULL, configMAX_PRIORITIES - 3, NULL);
         xTaskCreate(esp8266_http_test, ( const char * )"http",         configMINIMAL_STACK_SIZE * 32, NULL, configMAX_PRIORITIES - 3, NULL);
 //        xTaskCreate(esp8266_task,      ( const char * )"esp8266",    configMINIMAL_STACK_SIZE * 32, NULL, configMAX_PRIORITIES - 3, NULL);

@@ -1,9 +1,15 @@
 
+#include <stdbool.h>
+#include <stdint.h>
+#include <string.h>
 
 #include "FreeRTOS.h"
 #include "task.h"
+#include "task_priorities.h"
 
 #include "init.h"
+
+#include "ap_config.h"
 
 #include "ws2812.h"
 #include "ws2812_anim.h"
@@ -12,8 +18,10 @@
 #include "esp8266_http_server.h"
 
 #include "web_content_handler.h"
+#include "main_web_content_handler.h"
 
 #include "MQTTClient.h"
+
 
 /* place heap into ccm */
 uint8_t __attribute__ ((section(".ccmbss"), aligned(8))) ucHeap[ configTOTAL_HEAP_SIZE ];
@@ -72,7 +80,7 @@ static void esp8266_rx_task(void * inParameters) {
     }
 }
 
-/*! ESP8266 Receive Task
+/*! ESP8266 Socket Task
 
     This task handles asynchronous socket requests from the esp8266 module
 
@@ -85,20 +93,35 @@ static void esp8266_socket_task(void * inParameters) {
     }
 }
 
+
+/*! ESP8266 Wifi task
+
+    This task handles asynchronous wifi requests from the esp8266 module
+
+    \param[in]  inParameters    Unused
+*/
+void esp8266_wifi_task(void * inParameters) {
+
+    for(;;) {
+        esp8266_wifi_connection_handler();
+    }
+}
+
+
 /*! MQTT client task
 
     This task periodically checks if we're connectd to the mqtt server
 
     \param[in]  inParameters    Unused
 */
-static void esp8266_mqtt_task(void * inParameters) {
+//static void esp8266_mqtt_task(void * inParameters) {
 
-    for(;;) {
+//    for(;;) {
 
         /* replace this by code */
-        vTaskDelay(1000);
-    }
-}
+//        vTaskDelay(1000);
+//    }
+//}
 
 /*! Configure the esp8266 module
 
@@ -106,26 +129,40 @@ static void esp8266_mqtt_task(void * inParameters) {
 */
 static void esp8266_configure(void) {
 
-    /* give a bit of time to start all the tasks */
-    vTaskDelay(100);
-
     /* reset */
+    if(!esp8266_cmd_rst()) {
+        /* check how we can handle errors */
+    }
 
     /* echo off */
+    if(!esp8266_cmd_ate0()) {
+        /* check how we can handle errors */
+    }
 
-}
+    /* set multiple connections */
+    if(!esp8266_cmd_set_cipmux(true)) {
+        /* check how we can handle errors */
+    }
 
-/*! Initialize the web server
+    /* set station + AP mode */
+    if(!esp8266_cmd_set_cwmode_cur(/*ESP8266_WIFI_MODE_AP */ ESP8266_WIFI_MODE_STA_AP)) {
+        /* check how we can handle errors */
+    }
 
-    This function initializes the http server
-*/
-static void init_http(void) {
+    /* configure AP */
+    if(g_AP_SSID && g_AP_PWD) {
+        if(!esp8266_cmd_set_cwsap_cur((uint8_t*)g_AP_SSID, strlen(g_AP_SSID), (uint8_t*)g_AP_PWD, strlen(g_AP_PWD), g_AP_CHAN, g_AP_ENC_MODE)) {
+            /* check how we can handle errors */
+        }
+    } else {
 
-    /* set web content handlers */
-//    web_content_set_handlers(&sTestWebContent);
+        const char * l_AP_SSID = "WP_AP";
+        const char * l_AP_PWD = "deadbeef";
 
-    /* start http server */
-    esp8266_http_server_start();
+        if(!esp8266_cmd_set_cwsap_cur((uint8_t*)l_AP_SSID, strlen(l_AP_SSID), (uint8_t*)l_AP_PWD, strlen(l_AP_PWD), 11, ESP8266_ENC_MODE_WPA_WPA2_PSK)) {
+            /* check how we can handle errors */
+        }
+    }
 }
 
 /*! Initialization task
@@ -152,12 +189,12 @@ static void init_task(void * inParameters) {
     /* init animation */
     ws2812_animation_init();
 
-    if(!xTaskCreate(cpu_load_task, ( const char * )"cpu", configMINIMAL_STACK_SIZE, NULL, configMAX_PRIORITIES - 1, &xHandle)) {
+    if(!xTaskCreate(cpu_load_task, ( const char * )"cpu", configMINIMAL_STACK_SIZE, NULL, CPU_LOAD_TASK_PRIORITY, &xHandle)) {
         /* check how we can handle errors */
     }
 
     /* start led task */
-    if(!xTaskCreate(ws2812_anim_task, "ws2812_anim", configMINIMAL_STACK_SIZE * 8, NULL, configMAX_PRIORITIES - 2, &xHandle)) {
+    if(!xTaskCreate(ws2812_anim_task, "ws2812_anim", configMINIMAL_STACK_SIZE * 8, NULL, LED_TASK_PRIORITY, &xHandle)) {
         /* check how we can handle errors */
     }
 
@@ -165,25 +202,35 @@ static void init_task(void * inParameters) {
     esp8266_init();
 
     /* start socket task */
-    if(!xTaskCreate(esp8266_socket_task, "esp8266_so", configMINIMAL_STACK_SIZE, NULL, configMAX_PRIORITIES - 3, &xHandle)) {
+    if(!xTaskCreate(esp8266_socket_task, "esp8266_so", configMINIMAL_STACK_SIZE, NULL, ESP8266_SOCKET_TASK_PRIORITY, &xHandle)) {
+        /* check how we can handle errors */
+    }
+
+    if(!xTaskCreate(esp8266_wifi_task, "esp8266_wi", configMINIMAL_STACK_SIZE * 2, NULL, ESP8266_WIFI_TASK_PRIORITY, &xHandle)) {
         /* check how we can handle errors */
     }
 
     /* start rx task */
-    if(!xTaskCreate(esp8266_rx_task, "esp8266_rx", configMINIMAL_STACK_SIZE * 6, NULL, configMAX_PRIORITIES - 3, &xHandle)) {
+    if(!xTaskCreate(esp8266_rx_task, "esp8266_rx", configMINIMAL_STACK_SIZE * 6, NULL, ESP8266_RX_TASK_PRIORITY, &xHandle)) {
         /* check how we can handle errors */
     }
+
 
     /* configure the esp8266 module */
     esp8266_configure();
 
-    /* setup web server */
-    init_http();
-
-    /* start mqtt client task */
-    if(!xTaskCreate(esp8266_mqtt_task, ( const char * )"esp8266_mqtt", configMINIMAL_STACK_SIZE * 32, NULL, configMAX_PRIORITIES - 4, &xHandle)) {
+    /* initialize web server user data */
+    if(!main_web_content_init()) {
         /* check how we can handle errors */
     }
+
+    /* start web server */
+    esp8266_http_server_start(ESP8266_HTTP_SERVER_PRIORITY);
+
+    /* start mqtt client task */
+    // if(!xTaskCreate(esp8266_mqtt_task, ( const char * )"esp8266_mqtt", configMINIMAL_STACK_SIZE * 32, NULL, ESP8266_MQTT_TASK_PRIORITY, &xHandle)) {
+        /* check how we can handle errors */
+    // }
 
 
     /* delete this task */
@@ -197,7 +244,7 @@ int main(void) {
     init();
 
     /* create highest priority init task */
-    xTaskCreate(init_task, "init", configMINIMAL_STACK_SIZE *  2, NULL, configMAX_PRIORITIES - 1, NULL);
+    xTaskCreate(init_task, "init", configMINIMAL_STACK_SIZE *  2, NULL, INIT_TASK_PRIORITY, NULL);
 
     /* Start the scheduler. */
     vTaskStartScheduler();

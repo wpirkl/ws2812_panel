@@ -46,3 +46,6 @@
 
 # Notepad++ backups #
 *.bak
+
+#access point configuration
+src/ap_config.c

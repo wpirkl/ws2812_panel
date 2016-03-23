@@ -7,10 +7,17 @@ export ROOTDIR=$(shell pwd)
 # Sources
 SRCS  = main_testing.c
 #SRCS  = main.c
+#SRCS += main_web_content_handler.c
 SRCS += stm32f4xx_it.c
 SRCS += system_stm32f4xx.c
 SRCS += syscalls.c
 SRCS += init.c
+
+#conditionally add ap_config.c
+ifneq ("$(wildcard src/ap_config.c)","")
+SRCS += ap_config.c
+endif
+
 CPPSRCS = 
 
 # USB
