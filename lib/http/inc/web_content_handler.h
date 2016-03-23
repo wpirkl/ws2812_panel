@@ -93,11 +93,15 @@ bool web_gontent_set_token_value(const char * const inToken, size_t inTokenLengt
 
     This function replaces <!-- Token --!> by the token's value
 
-    \param[in]  inWebContent            The raw content to parse
-    \param[out] outWebContent           Place to store outgoing data
-    \param[in]  inOutWebContentSize     Maximum space to store outgoing data
+    \param[in]      inWebContent            The raw content to parse
+    \param[out]     outWebContent           Place to store outgoing data
+    \param[in]      inOutWebContentSize     Maximum space to store outgoing data
+    \param[in|out]  inOutOffset             Offset in web content
+
+    \retval true    Still data left to prepare... use chunked transfer
+    \retval false   No data left... can use regular transfer
 */
-bool web_content_prepare_output(const ts_web_content_file * inWebContent, char * outWebContent, size_t inOutWebContentSize, size_t * outWebContentLen);
+bool web_content_prepare_output(const ts_web_content_file * inWebContent, char * outWebContent, size_t inOutWebContentSize, size_t * outWebContentLen, size_t * inOutOffset);
 
 
 /*! Notify parsing done
@@ -118,6 +122,15 @@ void web_content_notify_parsing_start(void);
 */
 bool web_content_parse_url_encoded_data(char * inURLEncodedData, size_t inURLEncodedDataLen);
 
+
+/*! Check if content is cacheable
+
+    \param[in]  inWebContent    Pointer to a web content structure
+
+    \retval true    Cacheable
+    \retval false   Not cacheable
+*/
+bool web_content_is_cachable(const ts_web_content_file * inWebContent);
 
 
 #endif /* WEB_CONTENT_HANDLER_H_ */

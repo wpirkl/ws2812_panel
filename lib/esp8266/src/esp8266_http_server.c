@@ -135,7 +135,7 @@ static bool esp8266_http_handle_post(ts_http_server * inHttpServer);
 
 bool esp8266_http_server_start(void) {
 
-    return esp8266_cmd_cipserver(80, esp8266_http_server_handler_task, configMAX_PRIORITIES - 3, configMINIMAL_STACK_SIZE * 6);
+    return esp8266_cmd_cipserver(80, esp8266_http_server_handler_task, configMAX_PRIORITIES - 4, configMINIMAL_STACK_SIZE * 6);
 }
 
 
@@ -351,6 +351,8 @@ static void esp8266_http_parse_url(ts_http_server * inHttpServer) {
     }
 }
 
+#undef dbg
+#define dbg dbg_off
 
 /*! Send Reply
 
@@ -359,6 +361,10 @@ static void esp8266_http_parse_url(ts_http_server * inHttpServer) {
     \param[in]  inReply         The reply to send
 */
 static bool esp8266_http_send_reply(ts_http_server * inHttpServer, const ts_web_content_file * inContent, te_html_reply inReply) {
+
+    bool lChunkedTransfer = false;
+    bool lRetVal = true;
+    size_t lOffset = 0;
 
     inHttpServer->mHeaderSize = 0;
     inHttpServer->mHeaderSize += snprintf((char*)&inHttpServer->mHeader[inHttpServer->mHeaderSize], HTTP_HEADER_SIZE - inHttpServer->mHeaderSize,
@@ -369,15 +375,32 @@ static bool esp8266_http_send_reply(ts_http_server * inHttpServer, const ts_web_
         dbg("Preparing output\r\n");
 
         /* prepare data */
-        web_content_prepare_output(inContent, (char*)inHttpServer->mBody, HTTP_BODY_SIZE, &inHttpServer->mBodySize);
+        lChunkedTransfer = web_content_prepare_output(inContent, (char*)inHttpServer->mBody, HTTP_BODY_SIZE, &inHttpServer->mBodySize, &lOffset);
 
         dbg("Body length: %d\r\n", inHttpServer->mBodySize);
 
         inHttpServer->mHeaderSize += snprintf((char*)&inHttpServer->mHeader[inHttpServer->mHeaderSize], HTTP_HEADER_SIZE - inHttpServer->mHeaderSize,
                                               "Content-Type: %s\r\n", web_content_get_type(inContent));
 
-        inHttpServer->mHeaderSize += snprintf((char*)&inHttpServer->mHeader[inHttpServer->mHeaderSize], HTTP_HEADER_SIZE - inHttpServer->mHeaderSize,
-                                              "Content-Length: %d\r\n", inHttpServer->mBodySize);
+        if(web_content_is_cachable(inContent)) {
+
+            inHttpServer->mHeaderSize += snprintf((char*)&inHttpServer->mHeader[inHttpServer->mHeaderSize], HTTP_HEADER_SIZE - inHttpServer->mHeaderSize,
+                                                  "cache-control: private, max-age=604800\r\n");
+        } else {
+
+            inHttpServer->mHeaderSize += snprintf((char*)&inHttpServer->mHeader[inHttpServer->mHeaderSize], HTTP_HEADER_SIZE - inHttpServer->mHeaderSize,
+                                                  "Cache-control: no-cache\r\n");
+        }
+
+        if(lChunkedTransfer) {
+            /* do chunked encoding */
+            inHttpServer->mHeaderSize += snprintf((char*)&inHttpServer->mHeader[inHttpServer->mHeaderSize], HTTP_HEADER_SIZE - inHttpServer->mHeaderSize,
+                                                "Transfer-Encoding: chunked\r\n");
+        } else {
+            /* send it at once */
+            inHttpServer->mHeaderSize += snprintf((char*)&inHttpServer->mHeader[inHttpServer->mHeaderSize], HTTP_HEADER_SIZE - inHttpServer->mHeaderSize,
+                                                "Content-Length: %d\r\n", inHttpServer->mBodySize);
+        }
     }
 
     /* end of header */
@@ -391,7 +414,7 @@ static bool esp8266_http_send_reply(ts_http_server * inHttpServer, const ts_web_
 
     /* send header */
     if(!esp8266_cmd_cipsend_tcp(inHttpServer->mSocket, inHttpServer->mHeader, inHttpServer->mHeaderSize)) {
-        dbg("Sending header failed!\r\n");
+        dbg_err("%s(%d): Sending header failed! %p\r\n", __FILE__, __LINE__, inHttpServer->mSocket);
         return false;
     }
 
@@ -403,12 +426,23 @@ static bool esp8266_http_send_reply(ts_http_server * inHttpServer, const ts_web_
 //        dbg("Body length: %d\r\n", inHttpServer->mBodySize);
 //        dbg("Sending Body:\r\n\"%s\"\r\n", inHttpServer->mBody);
 
-        /* we have to split this into smaller 1k packets */
-        {
+        for(;;) {
             size_t lSent = 0;
             size_t lChunk = 0;
 
             bool lStatus = true;
+
+            if(lChunkedTransfer) {
+
+                /* add chunk size info */
+                inHttpServer->mHeaderSize = snprintf((char*)inHttpServer->mHeader, HTTP_HEADER_SIZE, "%x\r\n", inHttpServer->mBodySize);
+
+                /* send chunk header */
+                if(!esp8266_cmd_cipsend_tcp(inHttpServer->mSocket, inHttpServer->mHeader, inHttpServer->mHeaderSize)) {
+                    dbg_err("%s(%d): Sending chunk header failed! %p\r\n", __FILE__, __LINE__, inHttpServer->mSocket);
+                    return false;
+                }
+            }
 
             for(lSent = 0; lSent < inHttpServer->mBodySize && lStatus; lSent += lChunk) {
 
@@ -421,9 +455,45 @@ static bool esp8266_http_send_reply(ts_http_server * inHttpServer, const ts_web_
                 lStatus = esp8266_cmd_cipsend_tcp(inHttpServer->mSocket, &inHttpServer->mBody[lSent], lChunk);
                 if(!lStatus) {
 
-                    dbg("Sending body failed!\r\n");
+                    dbg_err("%s(%d): Sending data packet failed! %p\r\n", __FILE__, __LINE__, inHttpServer->mSocket);
                     return lStatus;
                 }
+            }
+
+            if(!lRetVal && lChunkedTransfer) {
+
+                /* last chunk */
+
+                /* send a chunk with 0 length */
+                inHttpServer->mHeaderSize = snprintf((char*)inHttpServer->mHeader, HTTP_HEADER_SIZE, "\r\n0\r\n\r\n");
+
+                /* send final chunk header */
+                if(!esp8266_cmd_cipsend_tcp(inHttpServer->mSocket, inHttpServer->mHeader, inHttpServer->mHeaderSize)) {
+                    dbg_err("%s(%d): Sending final chunk header failed! %p\r\n", __FILE__, __LINE__, inHttpServer->mSocket);
+                    return false;
+                }
+
+                /* we're done */
+                break;
+            }
+
+            if(lChunkedTransfer) {
+
+                /* send end of body \r\n */
+                inHttpServer->mHeaderSize = snprintf((char*)inHttpServer->mHeader, HTTP_HEADER_SIZE, "\r\n");
+
+                /* send chunk header */
+                if(!esp8266_cmd_cipsend_tcp(inHttpServer->mSocket, inHttpServer->mHeader, inHttpServer->mHeaderSize)) {
+                    dbg_err("%s(%d): Sending end of body failed! %p\r\n", __FILE__, __LINE__, inHttpServer->mSocket);
+                    return false;
+                }
+
+                /* fill next chunk */
+                lRetVal = web_content_prepare_output(inContent, (char*)inHttpServer->mBody, HTTP_BODY_SIZE, &inHttpServer->mBodySize, &lOffset);
+            } else {
+
+                /* nt chunked, so we're done */
+                break;
             }
         }
     }
@@ -527,7 +597,7 @@ static bool esp8266_http_parse(ts_http_server * inHttpServer) {
     for(;lContinue;) {
         lRetVal = esp8266_receive(inHttpServer->mSocket, &inHttpServer->mHeader[inHttpServer->mHeaderSize], 1, &lRcvCount);
         if(!lRetVal) {
-            dbg("receive on socket %p failed\r\n", inHttpServer->mSocket);
+            dbg_err("%s(%d): receive on socket %p failed\r\n", __FILE__, __LINE__, inHttpServer->mSocket);
             return lRetVal;
         }
 

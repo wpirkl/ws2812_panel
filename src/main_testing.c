@@ -1184,7 +1184,7 @@ void esp8266_http_test(void * inParameters) {
     printf("done\r\n");
 
     /* create rx task */
-    lRetVal = xTaskCreate(esp8266_rx_task, ( const char * )"esp8266_rx", configMINIMAL_STACK_SIZE * 6, NULL, configMAX_PRIORITIES - 2, &xHandle);
+    lRetVal = xTaskCreate(esp8266_rx_task, ( const char * )"esp8266_rx", configMINIMAL_STACK_SIZE * 6, NULL, configMAX_PRIORITIES - 3, &xHandle);
     if(lRetVal) {
         printf("Successfully started RX Task %p\r\n", xHandle);
     } else {

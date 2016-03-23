@@ -519,13 +519,16 @@ STATIC bool esp8266_rx_handle_wifi(void) {
     return false;
 }
 
+#undef dbg
+#define dbg dbg_off
+
 /*! This function handles x,CLOSED or X,CONNECT asynchronous messages
     \todo implement
 */
 STATIC bool esp8266_rx_handle_socket(void) {
 
     /* 0,CONNECT\r\n */
-//    usart_dma_peek_skip(sCONNECT, sizeof(sCONNECT), 1);     /* skip the first character */
+    /* skip the first character */
     if(usart_dma_peek_skip(sCONNECT, sizeof(sCONNECT), 1)) {
 
         uintptr_t lChannel;
@@ -563,6 +566,8 @@ STATIC bool esp8266_rx_handle_socket(void) {
 
         if(lChannel < ESP8266_MAX_CONNECTIONS) {
 
+            dbg("%s(%d): connect [%d] %p\r\n", __FILE__, __LINE__, lChannel, &sEsp8266.mSockets[lChannel]);
+
             ts_esp8266_socket_cmd lSocketCommand = {
                 .mCommand = ESP8266_SOCKET_OPEN,
                 .mSocket = lChannel
@@ -572,19 +577,15 @@ STATIC bool esp8266_rx_handle_socket(void) {
                 dbg_err("%s(%d): sending to queue failed!\r\n", __FILE__, __LINE__);
             }
 
-//            dbg("%s(%d): %d,CONNECT\r\n", __func__, __LINE__, lChannel);
-
         } else {
 
             dbg_err("%s(%d): Socket id %d is too big!\r\n", __FILE__, __LINE__, lChannel);
         }
 
-//        dbg("%s(%d): %s treated\r\n", __FILE__, __LINE__, __func__);
         return true;
     }
 
     /* 0,CLOSED\r\n */
-//    usart_dma_match(sCLOSED, sizeof(sCLOSED), &lLen);
     if(usart_dma_peek_skip(sCLOSED, sizeof(sCLOSED), 1)) {
 
         uint8_t lChannel = '0';
@@ -617,8 +618,6 @@ STATIC bool esp8266_rx_handle_socket(void) {
 
         lChannel -= '0';
 
-//        dbg("%s(%d): Socket is: %d\r\n", __FILE__, __LINE__, lChannel);
-
         if(lChannel < ESP8266_MAX_CONNECTIONS) {
 
             ts_esp8266_socket_cmd lSocketCommand = {
@@ -626,13 +625,11 @@ STATIC bool esp8266_rx_handle_socket(void) {
                 .mSocket = lChannel
             };
 
-//          dbg("%s(%d): %d,CLOSED\r\n", __func__, __LINE__, lChannel);
+            dbg("%s(%d): close [%d] %p\r\n", __FILE__, __LINE__, lChannel, &sEsp8266.mSockets[lChannel]);
 
             if(!xQueueSend(sEsp8266.mSocketCmdQ, &lSocketCommand, 1000 / portTICK_PERIOD_MS)) {
                 dbg_err("%s(%d): sending to queue failed!\r\n", __FILE__, __LINE__);
             }
-
-            dbg("%s(%d): Closing socket %p\r\n", __FILE__, __LINE__, &sEsp8266.mSockets[lChannel]);
 
         } else {
             dbg_err("%s(%d): Socket %d is too big!\r\n", __FILE__, __LINE__, lChannel);
@@ -674,8 +671,6 @@ STATIC bool esp8266_rx_handle_socket(void) {
 
         lChannel -= '0';
 
-//        dbg("%s(%d): Socket is: %d\r\n", __FILE__, __LINE__, lChannel);
-
         if(lChannel < ESP8266_MAX_CONNECTIONS) {
 
             ts_esp8266_socket_cmd lSocketCommand = {
@@ -683,23 +678,24 @@ STATIC bool esp8266_rx_handle_socket(void) {
                 .mSocket = lChannel
             };
 
-//          dbg("%s(%d): %d,CLOSED\r\n", __func__, __LINE__, lChannel);
+            dbg("%s(%d): connect fail [%d] %p\r\n", __FILE__, __LINE__, lChannel, &sEsp8266.mSockets[lChannel]);
 
             if(!xQueueSend(sEsp8266.mSocketCmdQ, &lSocketCommand, 1000 / portTICK_PERIOD_MS)) {
                 dbg_err("%s(%d): sending to queue failed!\r\n", __FILE__, __LINE__);
             }
 
-            dbg("%s(%d): Closing socket %p\r\n", __FILE__, __LINE__, &sEsp8266.mSockets[lChannel]);
-
         } else {
             dbg_err("%s(%d): Socket %d is too big!\r\n", __FILE__, __LINE__, lChannel);
         }
 
-//        dbg("%s(%d): %s treated\r\n", __FILE__, __LINE__, __func__);
+        return true;
     }
 
     return false;
 }
+
+#undef dbg
+#define dbg dbg_off
 
 /*! Handles generic command responses
 
@@ -723,12 +719,18 @@ STATIC bool esp8266_rx_handle_command_response_gen(const uint8_t * const inSenti
 
             if(lSize > inSentinelLen) {
 #if 0
-                uint8_t lBuffer[32];
+                uint8_t lBuffer[64];
                 size_t lBufferLen;
                 size_t lReadLen;
 #endif
                 dbg_err("%s(%d): WARNING: sentinel lenght: %d, received %d\r\n", __FILE__, __LINE__, inSentinelLen, lSize);
 #if 0
+
+                lReadLen = (inSentinelLen < sizeof(lBuffer)-1)? inSentinelLen : (sizeof(lBuffer)-1);
+                memcpy(lBuffer, inSentinel, lReadLen);
+                lBuffer[lReadLen] = '\0';
+                dbg_err("%s(%d): sentinel was: \"%s\"\r\n", __FILE__, __LINE__, lBuffer);
+
                 if(sizeof(lBuffer)-1 < lSize - inSentinelLen) {
                     lReadLen = sizeof(lBuffer)-1;
                 } else {
@@ -853,8 +855,28 @@ void esp8266_rx_handler(void) {
     dbg("%s(%d): in rx buffer: %d bytes\r\n", __FILE__, __LINE__, usart_dma_rx_num());
 
     do {
+
         lTreated = false;
 
+        if(usart_dma_peek(sIPD, sizeof(sIPD))) {
+
+            lTreated = esp8266_rx_handle_ipd();
+
+        } else if(usart_dma_peek(sWIFI_DIS, sizeof(sWIFI_DIS)) ||
+                  usart_dma_peek(sWIFI_CON, sizeof(sWIFI_CON)) || 
+                  usart_dma_peek(sWIFI_IP, sizeof(sWIFI_IP))) {
+
+            lTreated = esp8266_rx_handle_wifi();
+        } else if(usart_dma_peek_skip(sCONNECT, sizeof(sCONNECT), 1) ||
+                  usart_dma_peek_skip(sCLOSED, sizeof(sCLOSED), 1) ||
+                  usart_dma_peek_skip(sCONNECT_FAIL, sizeof(sCONNECT_FAIL), 1)) {
+
+            lTreated = esp8266_rx_handle_socket();
+        } else {
+            lTreated = esp8266_rx_handle_command_response();
+        }
+
+#if 0
         /* handle socket receive */
         lTreated = esp8266_rx_handle_ipd() || lTreated;
 
@@ -863,9 +885,10 @@ void esp8266_rx_handler(void) {
 
         /* handle WIFI ... messages */
         lTreated = esp8266_rx_handle_wifi() || lTreated;
+#endif
 
         /* handle command response */
-        lTreated = esp8266_rx_handle_command_response() || lTreated;
+//        lTreated = esp8266_rx_handle_command_response() || lTreated;
 
     } while(lTreated);  /* treat as long as we can */
 
@@ -2132,7 +2155,7 @@ bool esp8266_cmd_cipsend_tcp(ts_esp8266_socket * inSocket, uint8_t * inBuffer, s
 
                             esp8266_set_sentinel(NULL, 0, NULL, 0);
                             sEsp8266.mStatus = ESP8266_TIMEOUT;
-                            dbg_err("%s(%d): Timeout\r\n", __FILE__, __LINE__);
+                            dbg_err("%s(%d): Timeout: %p\r\n", __FILE__, __LINE__, inSocket);
 
                         } else if(sEsp8266.mStatus == ESP8266_OK) {
 
@@ -2152,6 +2175,8 @@ bool esp8266_cmd_cipsend_tcp(ts_esp8266_socket * inSocket, uint8_t * inBuffer, s
                                 /* receive and clear it ... */
                                 if(!xSemaphoreTake(sEsp8266.mResponseSema, 100 / portTICK_PERIOD_MS)) {
                                     esp8266_set_sentinel(NULL, 0, NULL, 0);
+                                } else {
+                                    dbg_err("%s(%d): busy s... received %p\r\n", __FILE__, __LINE__, inSocket);
                                 }
                             }
 
@@ -2174,10 +2199,15 @@ bool esp8266_cmd_cipsend_tcp(ts_esp8266_socket * inSocket, uint8_t * inBuffer, s
                                 /* get 'SEND FAIL' out of the buffer */
                                 esp8266_set_sentinel(NULL, 0, sSEND_FAIL, sizeof(sSEND_FAIL));
                                 esp8266_request_rx_handler_refresh();
-                                xSemaphoreTake(sEsp8266.mResponseSema, 100 / portTICK_PERIOD_MS);
+                                if(!xSemaphoreTake(sEsp8266.mResponseSema, 100 / portTICK_PERIOD_MS)) {
+                                    dbg_err("%s(%d): Didn't get send fail: %p\r\n", __FILE__, __LINE__, inSocket);
+                                    esp8266_set_sentinel(NULL, 0, NULL, 0);
+                                } else {
+                                    dbg_err("%s(%d): Send fail [%d] %p\r\n", __FILE__, __LINE__, inSocket->mSocketId, inSocket);
+                                }
 
                                 sEsp8266.mStatus = ESP8266_TIMEOUT;
-                                dbg_err("%s(%d): Timeout\r\n", __FILE__, __LINE__);
+                                dbg_err("%s(%d): Timeout: %p\r\n", __FILE__, __LINE__, inSocket);
 
                             } else if(sEsp8266.mStatus == ESP8266_OK) {
 

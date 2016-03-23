@@ -156,6 +156,14 @@ const char * web_content_get_type(const ts_web_content_file * inWebContent) {
 }
 
 
+bool web_content_is_cachable(const ts_web_content_file * inWebContent) {
+
+    te_web_content_type lContentType = web_content_get_enum(inWebContent);
+
+    return lContentType != MIME_JSON && lContentType != MIME_HTML;
+}
+
+
 bool web_content_get_token_value(const char * const inToken, size_t inTokenLength, char * outBuffer, size_t inBufferSize, size_t * outBufferLen) {
 
     size_t lCount;
@@ -248,7 +256,7 @@ static size_t web_content_print_missing_output(const ts_web_content_file * inWeb
 }
 
 
-bool web_content_prepare_output(const ts_web_content_file * inWebContent, char * outWebContent, size_t inOutWebContentSize, size_t * outWebContentLen) {
+bool web_content_prepare_output(const ts_web_content_file * inWebContent, char * outWebContent, size_t inOutWebContentSize, size_t * outWebContentLen, size_t * inOutOffset) {
 
     size_t lCount;
     size_t lOutPointer = 0;
@@ -259,6 +267,7 @@ bool web_content_prepare_output(const ts_web_content_file * inWebContent, char *
     size_t lTokenLength = 0;
 
     size_t lWrittenLength = 0;
+    bool lRetVal;
 
     te_web_parser_state lState = WEB_PARSER_IDLE;
 
@@ -269,14 +278,20 @@ bool web_content_prepare_output(const ts_web_content_file * inWebContent, char *
 
         dbg("Don't parse MIME Type: \"%s\"\r\n", sWebContentType[lContentType].mType);
 
-        lCopySize = (inOutWebContentSize < inWebContent->mFileLength)? inOutWebContentSize : inWebContent->mFileLength;
-        memcpy(outWebContent, inWebContent->mFile, lCopySize);
-        *outWebContentLen = lCopySize;
+        lCopySize = (inOutWebContentSize < inWebContent->mFileLength - *inOutOffset)? inOutWebContentSize : (inWebContent->mFileLength - *inOutOffset);
+        memcpy(outWebContent, &inWebContent->mFile[*inOutOffset], lCopySize);
 
-        return true;
+        lRetVal = lCopySize < inWebContent->mFileLength - *inOutOffset;
+
+        *outWebContentLen = lCopySize;
+        *inOutOffset += lCopySize;
+
+        /* returns false if everything fits in one block */
+        return lRetVal;
     }
 
     dbg("Parsing\r\n");
+
 
     /* iterate over all characters */
     for(lCount = 0; lCount < inWebContent->mFileLength; lCount++) {
@@ -395,8 +410,9 @@ bool web_content_prepare_output(const ts_web_content_file * inWebContent, char *
     }
 
     *outWebContentLen = lOutPointer;
+    *inOutOffset += lCount;
 
-    return true;
+    return false;
 }
 
 

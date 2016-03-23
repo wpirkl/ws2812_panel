@@ -214,15 +214,21 @@ void ws2812_animation_main(void) {
         lDelay = 0; // timed out
     } // xTaskCheckForTimeOut adapts lDelay to fit to the timeout
 
-    /* check if there are new transition commands */
-    if(xQueueReceive(sAnimationControl.mMsgQueue, &sAnimationControl.mLastCommand, lDelay)) {
+    if(sAnimationControl.mState == WS2812_ANIM_STATE_TRANSIT) {
 
-        /* if we received a command, go to transition state */
-        sAnimationControl.mState = WS2812_ANIM_STATE_TRANSIT;
-        sTransitionInitFuncs[sAnimationControl.mLastCommand.mTransition](&sAnimationControl.mTransition, &sAnimationControl.mLastCommand.mTransParam);
+        vTaskDelay(lDelay);
 
-        /* init second animation */
-        sAnimationInitFuncs[sAnimationControl.mLastCommand.mAnimation](&sAnimationControl.mAnimation[(sAnimationControl.mCurrentAnimation + 1) & 1], &sAnimationControl.mLastCommand.mAnimParam);
+    } else {
+        /* check if there are new transition commands */
+        if(xQueueReceive(sAnimationControl.mMsgQueue, &sAnimationControl.mLastCommand, lDelay)) {
+
+            /* if we received a command, go to transition state */
+            sAnimationControl.mState = WS2812_ANIM_STATE_TRANSIT;
+            sTransitionInitFuncs[sAnimationControl.mLastCommand.mTransition](&sAnimationControl.mTransition, &sAnimationControl.mLastCommand.mTransParam);
+
+            /* init second animation */
+            sAnimationInitFuncs[sAnimationControl.mLastCommand.mAnimation](&sAnimationControl.mAnimation[(sAnimationControl.mCurrentAnimation + 1) & 1], &sAnimationControl.mLastCommand.mAnimParam);
+        }
     }
 }
 

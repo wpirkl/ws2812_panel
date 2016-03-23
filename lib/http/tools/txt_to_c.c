@@ -1,7 +1,7 @@
 #include <stdio.h>
 #include <stdint.h>
 #include <string.h>
-
+#include <sys/stat.h>
 
 void encode_x(FILE * inFile, uint8_t inCharacter) {
 
@@ -44,13 +44,28 @@ int main(int argc, char * argv[]) {
         size_t lFileIndex;
         uint8_t lBuffer[16];
 
+        struct stat statbuf;
+
         printf("Processing file \"%s\"\n", argv[lCount]);
+
+        if(stat(argv[lCount], &statbuf) == 0) {
+
+            if(S_ISDIR(statbuf.st_mode)) {
+                printf("Skipping directory\r\n");
+                continue;
+            }
+
+        } else {
+            printf("Skipping this file (fstat didn't work)\n");
+            continue;
+        }
 
         lInputFile = fopen(argv[lCount], "r");
         if(!lInputFile) {
-            perror("Could not open input file");
-            return -1;
+            printf("Could not open input file: %s\n", argv[lCount]);
+            continue;
         }
+
 
         lFileNameLength = strlen(argv[lCount]);
 
