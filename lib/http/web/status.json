@@ -1,5 +1,6 @@
 {
 "status_ssid": "<!-- statusssid -->",
 "counter": "<!-- counter -->",
-"cpu_load": "<!-- cpuload -->"
+"cpu_load": "<!-- cpuload -->",
+"statusip": "<!-- statusip -->"
 }

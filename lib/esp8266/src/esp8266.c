@@ -69,6 +69,7 @@ const uint8_t sAT_CIPSTART[]  = { 'A', 'T', '+', 'C', 'I', 'P', 'S', 'T', 'A', '
 const uint8_t sAT_CIPCLOSE[]  = { 'A', 'T', '+', 'C', 'I', 'P', 'C', 'L', 'O', 'S', 'E' };
 const uint8_t sAT_CIPSEND[]   = { 'A', 'T', '+', 'C', 'I', 'P', 'S', 'E', 'N', 'D' };
 const uint8_t sAT_CIPSERVER[] = { 'A', 'T', '+', 'C', 'I', 'P', 'S', 'E', 'R', 'V', 'E', 'R' };
+const uint8_t sAT_CIPSTA[]    = { 'A', 'T', '+', 'C', 'I', 'P', 'S', 'T', 'A' };
 
 const uint8_t sAT_PING[] = { 'A', 'T', '+', 'P', 'I', 'N', 'G' };
 
@@ -1705,6 +1706,39 @@ bool esp8266_cmd_ping(uint8_t * inAddress, size_t inAddressLength, uint32_t * ou
         return true;
     }
 
+
+    return false;
+}
+
+bool esp8266_cmd_cipsta(uint8_t * outIpAddress, size_t inIpAddrMaxLen, size_t * outIpAddrLen) {
+
+    uint8_t lCommandBuffer[sizeof(sAT_CIPSTA) + sizeof(sCUR) + 1];
+    size_t lLen;
+    uint8_t lReturnBuffer[12 + 3 + 1 + 3 + 1 + 3 + 1 + 3 + 1];  /* +CIPSTA:ip:"192.168.1.35" +CIP */
+    size_t lReturnLen;
+    size_t lCount;
+
+    memcpy(&lCommandBuffer[0], sAT_CIPSTA, sizeof(sAT_CIPSTA));
+    lLen = sizeof(sAT_CIPSTA);
+
+    memcpy(&lCommandBuffer[lLen], sCUR, sizeof(sCUR));
+
+    lCommandBuffer[lLen++] = '?';
+
+    if(esp8266_ok_cmd_str(lCommandBuffer, lLen, lReturnBuffer, sizeof(lReturnBuffer), &lReturnLen, 2000)) {
+
+        for(lCount = 12; lCount < lReturnLen; lCount++) {
+            if(lReturnBuffer[lCount] == '"') {
+
+                memcpy(outIpAddress, &lReturnBuffer[12], (lCount - 12 < inIpAddrMaxLen)? (lCount - 12) : inIpAddrMaxLen);
+                if(outIpAddrLen) {
+                    *outIpAddrLen = (lCount - 12 < inIpAddrMaxLen)? (lCount - 12) : inIpAddrMaxLen;
+                }
+
+                return true;
+            }
+        }
+    }
 
     return false;
 }

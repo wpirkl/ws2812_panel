@@ -876,6 +876,27 @@ bool esp8266_http_test_web_content_get_status_ssid(void * inUserData, char * out
     return true;
 }
 
+bool esp8266_http_test_web_content_get_status_ip(void * inUserData, char * outBuffer, size_t inBufferSize, size_t * outBufferLen) {
+
+    uint8_t lIP_retrv[32];
+    size_t  lIP_retrv_len;
+
+//    ts_myUserData * lUserData = (ts_myUserData*)inUserData;
+
+//    printf("%s(%d)\r\n", __func__, __LINE__);
+
+    if(esp8266_cmd_cipsta(lIP_retrv, sizeof(lIP_retrv) - 1, &lIP_retrv_len)) {
+
+        lIP_retrv[lIP_retrv_len] = '\0';
+        *outBufferLen = snprintf(outBuffer, inBufferSize, "%s", lIP_retrv);
+
+    } else {
+        *outBufferLen = snprintf(outBuffer, inBufferSize, "NONE");
+    }
+
+    return true;
+}
+
 bool esp8266_http_test_web_content_get_counter(void * inUserData, char * outBuffer, size_t inBufferSize, size_t * outBufferLen) {
 
     ts_myUserData * lUserData = (ts_myUserData*)inUserData;
@@ -1100,7 +1121,7 @@ void esp8266_http_test_web_content_done_parse(void * inUserData) {
 
 const ts_web_content_handlers g_WebContentHandler = {
 
-    .mHandlerCount = 10,
+    .mHandlerCount = 11,
     .mParsingStart = esp8266_http_test_web_content_start_parse,
     .mParsingDone  = esp8266_http_test_web_content_done_parse,
     .mUserData = (void*)&sUserData,
@@ -1118,6 +1139,11 @@ const ts_web_content_handlers g_WebContentHandler = {
         {
             .mToken = "statusssid",
             .mGet = esp8266_http_test_web_content_get_status_ssid,
+            .mSet = NULL,
+        },
+        {
+            .mToken = "statusip",
+            .mGet = esp8266_http_test_web_content_get_status_ip,
             .mSet = NULL,
         },
         {

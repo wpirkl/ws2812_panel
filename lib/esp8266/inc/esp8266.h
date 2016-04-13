@@ -283,6 +283,18 @@ bool esp8266_cmd_set_cipmux(bool inMultipleConnections);
 bool esp8266_cmd_get_cipmux(bool * outMultipleConnections);
 
 
+/*! Get esp8266 station IP address
+
+    \param[out] outIpAddress                returns the IP address of the station
+    \param[in]  inIpAddrMaxLen              the maximum length of the buffer
+    \param[out] outIpAddrLen                returns the actual length of the IP address
+
+    \retval true    Successful completion
+    \retval false   Failed
+*/
+bool esp8266_cmd_cipsta(uint8_t * outIpAddress, size_t inIpAddrMaxLen, size_t * outIpAddrLen);
+
+
 /*! Ping esp8266 destination
 
     \param[in]  inAddress       The Address of the remote host
