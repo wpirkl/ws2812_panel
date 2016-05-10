@@ -83,4 +83,5 @@ Go to the `web` directory and run:
 
 ```
 ../tools/txt_to_c ../src/web_content.c *
+../tools/txt_to_c ../src/web_content.c 404.html 500.html bootstrap.min.css.gz bootstrap.min.js.gz favicon.png index.html jquery-2.2.0.min.js.gz led.html mqtt.html scripts.js status.html status.json wifi.html
 ```

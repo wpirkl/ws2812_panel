@@ -1,10 +1,8 @@
 
-#include "FreeRTOS.h"
-
 #include "ws2812.h"
 
 #include "ws2812_anim_obj.h"
-#include "ws2812_anim_const_color.h"
+#include "ws2812_anim_gradient.h"
 
 
 
@@ -17,7 +15,7 @@ static void ws2812_anim_const_color_update(tu_ws2812_anim * pThis) {
 
 void ws2812_anim_const_color_init(tu_ws2812_anim * pThis, tu_ws2812_anim_param * pParam) {
 
-    pThis->mBase.mf_update        = ws2812_anim_const_color_update;
+    pThis->mBase.mfUpdate        = ws2812_anim_const_color_update;
     pThis->mConstantColor.mColor  = pParam->mConstantColor.mColor;
 }
 

@@ -14,7 +14,7 @@ typedef union u_ws2812_anim_param tu_ws2812_anim_param;
 typedef struct {
 
     /*! Process function */
-    void     (* mf_update)(tu_ws2812_anim * pThis);
+    void     (* mfUpdate)(tu_ws2812_anim * pThis);
 
     /*! panel to paint on */
     color_f     mPanel[WS2812_NR_ROWS * WS2812_NR_COLUMNS];

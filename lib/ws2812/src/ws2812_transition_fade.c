@@ -43,7 +43,7 @@ static void ws2812_trans_fade_update(tu_ws2812_trans * pThis, tu_ws2812_anim * p
 
 void ws2812_trans_fade_init(tu_ws2812_trans * pThis, tu_ws2812_trans_param * pParam) {
 
-    pThis->mBase.mf_update = ws2812_trans_fade_update;
+    pThis->mBase.mfUpdate = ws2812_trans_fade_update;
     pThis->mFade.mDuration = pParam->mFade.mDuration;
     pThis->mFade.mElapsed  = 0;
 

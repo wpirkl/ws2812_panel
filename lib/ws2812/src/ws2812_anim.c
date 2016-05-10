@@ -16,6 +16,7 @@
 
 // animations
 #include "ws2812_anim_const_color.h"
+#include "ws2812_anim_gradient.h"
 
 // transitions
 #include "ws2812_transition_fade.h"
@@ -39,6 +40,9 @@
 /*! Defines the animation frequency in Hz */
 #define WS2812_ANIMATION_FREQ       (100)
 
+/*! Defines the ms per animation tick */
+#define WS2812_ANIMATION_DELAY_MS   (1000 / WS2812_ANIMATION_FREQ)
+
 
 
 /*! Enumerates the animation states */
@@ -57,6 +61,9 @@ typedef enum {
 
     /*! Constant color animation */
     WS2812_ANIMATION_CONSTANT_COLOR = 0,
+
+    /*! Gradient animation */
+    WS2812_ANIMATION_GRADIENT,
 
 } te_ws2812_animations;
 
@@ -125,6 +132,7 @@ static ts_ws2812_anim_ctrl sAnimationControl;
 static const f_ws2812_anim_init sAnimationInitFuncs[] = {
 
     [WS2812_ANIMATION_CONSTANT_COLOR] = ws2812_anim_const_color_init,
+    [WS2812_ANIMATION_GRADIENT]       = ws2812_anim_gradient_init,
 };
 
 
@@ -181,12 +189,12 @@ void ws2812_animation_main(void) {
         case WS2812_ANIM_STATE_TRANSIT: {
 
                 /* run animation 1 */
-                sAnimationControl.mAnimation[sAnimationControl.mCurrentAnimation].mBase.mf_update(&sAnimationControl.mAnimation[sAnimationControl.mCurrentAnimation]);
+                sAnimationControl.mAnimation[sAnimationControl.mCurrentAnimation].mBase.mfUpdate(&sAnimationControl.mAnimation[sAnimationControl.mCurrentAnimation]);
 
-                /* run animatino 2 */
-                sAnimationControl.mAnimation[(sAnimationControl.mCurrentAnimation + 1) & 1].mBase.mf_update(&sAnimationControl.mAnimation[(sAnimationControl.mCurrentAnimation + 1) & 1]);
+                /* run animation 2 */
+                sAnimationControl.mAnimation[(sAnimationControl.mCurrentAnimation + 1) & 1].mBase.mfUpdate(&sAnimationControl.mAnimation[(sAnimationControl.mCurrentAnimation + 1) & 1]);
 
-                sAnimationControl.mTransition.mBase.mf_update(&sAnimationControl.mTransition,
+                sAnimationControl.mTransition.mBase.mfUpdate(&sAnimationControl.mTransition,
                                                               &sAnimationControl.mAnimation[sAnimationControl.mCurrentAnimation],
                                                               &sAnimationControl.mAnimation[(sAnimationControl.mCurrentAnimation + 1) & 1]);
 
@@ -198,7 +206,7 @@ void ws2812_animation_main(void) {
         default: {
 
                 /* run animation */
-                sAnimationControl.mAnimation[sAnimationControl.mCurrentAnimation].mBase.mf_update(&sAnimationControl.mAnimation[sAnimationControl.mCurrentAnimation]);
+                sAnimationControl.mAnimation[sAnimationControl.mCurrentAnimation].mBase.mfUpdate(&sAnimationControl.mAnimation[sAnimationControl.mCurrentAnimation]);
 
                 /* update led from animation buffer */
                 ws2812_updateLED(sAnimationControl.mAnimation[sAnimationControl.mCurrentAnimation].mBase.mPanel);
@@ -242,9 +250,34 @@ void ws2812_anim_const_color(uint8_t inRed, uint8_t inGreen, uint8_t inBlue) {
     lCommand.mAnimParam.mConstantColor.mColor.G = inGreen;
     lCommand.mAnimParam.mConstantColor.mColor.B = inBlue;
 
-    /*! Use configured transition */
+    /*! todo: use configured transition */
     lCommand.mTransition = WS2812_TRANSITION_FADE;
-    lCommand.mTransParam.mFade.mDuration = 500;
+    lCommand.mTransParam.mFade.mDuration = 1000 / WS2812_ANIMATION_DELAY_MS;    // 1000ms @ 100 Hz
+
+    xQueueSend(sAnimationControl.mMsgQueue, &lCommand, portMAX_DELAY );
+}
+
+
+void ws2812_anim_gradient(uint8_t inFirstRed, uint8_t inFirstGreen, uint8_t inFirstBlue,
+                          uint8_t inSecondRed, uint8_t inSecondGreen, uint8_t inSecondBlue,
+                          int16_t inAngle) {
+
+    ts_ws2812_anim_ctrl_cmd lCommand;
+
+    lCommand.mAnimation = WS2812_ANIMATION_GRADIENT;
+    lCommand.mAnimParam.mGradient.mFirstColor.R = inFirstRed;
+    lCommand.mAnimParam.mGradient.mFirstColor.G = inFirstGreen;
+    lCommand.mAnimParam.mGradient.mFirstColor.B = inFirstBlue;
+
+    lCommand.mAnimParam.mGradient.mSecondColor.R = inSecondRed;
+    lCommand.mAnimParam.mGradient.mSecondColor.G = inSecondGreen;
+    lCommand.mAnimParam.mGradient.mSecondColor.B = inSecondBlue;
+
+    lCommand.mAnimParam.mGradient.mAngle = inAngle;
+
+    /*! todo: use configured transition */
+    lCommand.mTransition = WS2812_TRANSITION_FADE;
+    lCommand.mTransParam.mFade.mDuration = 1000 / WS2812_ANIMATION_DELAY_MS;    // 1000ms @ 100 Hz
 
     xQueueSend(sAnimationControl.mMsgQueue, &lCommand, portMAX_DELAY );
 }

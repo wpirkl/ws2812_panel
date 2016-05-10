@@ -846,6 +846,9 @@ typedef struct {
     /*! Color */
     color       mColor;
 
+    /*! Color1 */
+    color       mColor1;
+
 } ts_myUserData;
 
 static ts_myUserData sUserData = {
@@ -1003,9 +1006,7 @@ static uint8_t hex_decode(char c) {
     }
 }
 
-bool esp8266_http_test_web_content_set_color(void * inUserData, const char * const inValue, size_t inValueLength) {
-
-    ts_myUserData * lUserData = (ts_myUserData*)inUserData;
+static bool esp8266_http_test_web_content_parse_color(color * outColor, const char * const inValue, size_t inValueLength) {
 
     char lBuffer[8];
     size_t lLen;
@@ -1019,14 +1020,29 @@ bool esp8266_http_test_web_content_set_color(void * inUserData, const char * con
 
     if(inValueLength == 7) {
         /* first character is # */
-        lUserData->mColor.R = (hex_decode(inValue[1]) << 4) | hex_decode(inValue[2]);
-        lUserData->mColor.G = (hex_decode(inValue[3]) << 4) | hex_decode(inValue[4]);
-        lUserData->mColor.B = (hex_decode(inValue[5]) << 4) | hex_decode(inValue[6]);
+        outColor->R = (hex_decode(inValue[1]) << 4) | hex_decode(inValue[2]);
+        outColor->G = (hex_decode(inValue[3]) << 4) | hex_decode(inValue[4]);
+        outColor->B = (hex_decode(inValue[5]) << 4) | hex_decode(inValue[6]);
     }
 
-    printf("%s(%d): decoded color R: %02x, G: %02x, B: %02x\r\n", __func__, __LINE__, lUserData->mColor.R, lUserData->mColor.G, lUserData->mColor.B);
+    printf("%s(%d): decoded color R: %02x, G: %02x, B: %02x\r\n", __func__, __LINE__, outColor->R, outColor->G, outColor->B);
 
     return true;
+
+}
+
+bool esp8266_http_test_web_content_set_color(void * inUserData, const char * const inValue, size_t inValueLength) {
+
+    ts_myUserData * lUserData = (ts_myUserData*)inUserData;
+
+    return esp8266_http_test_web_content_parse_color(&lUserData->mColor, inValue, inValueLength);
+}
+
+bool esp8266_http_test_web_content_set_color1(void * inUserData, const char * const inValue, size_t inValueLength) {
+
+    ts_myUserData * lUserData = (ts_myUserData*)inUserData;
+
+    return esp8266_http_test_web_content_parse_color(&lUserData->mColor1, inValue, inValueLength);
 }
 
 bool esp8266_http_test_web_content_set_transition(void * inUserData, const char * const inValue, size_t inValueLength) {
@@ -1121,62 +1137,67 @@ void esp8266_http_test_web_content_done_parse(void * inUserData) {
 
 const ts_web_content_handlers g_WebContentHandler = {
 
-    .mHandlerCount = 11,
+    .mHandlerCount = 12,
     .mParsingStart = esp8266_http_test_web_content_start_parse,
     .mParsingDone  = esp8266_http_test_web_content_done_parse,
     .mUserData = (void*)&sUserData,
     .mHandler = {
-        {
+        {   /* 0 */
             .mToken = "ver",
             .mGet = esp8266_http_test_web_content_get_ver,
             .mSet = esp8266_http_test_web_content_set_var,
         },
-        {
+        {   /* 1 */
             .mToken = "counter",
             .mGet = esp8266_http_test_web_content_get_counter,
             .mSet = NULL,
         },
-        {
+        {   /* 2 */
             .mToken = "statusssid",
             .mGet = esp8266_http_test_web_content_get_status_ssid,
             .mSet = NULL,
         },
-        {
+        {   /* 3 */
             .mToken = "statusip",
             .mGet = esp8266_http_test_web_content_get_status_ip,
             .mSet = NULL,
         },
-        {
+        {   /* 4 */
             .mToken = "cpuload",
             .mGet = esp8266_http_test_web_content_get_cpu,
             .mSet = NULL,
         },
-        {
+        {   /* 5 */
             .mToken = "ssid",
             .mGet = NULL,
             .mSet = esp8266_http_test_web_content_set_ssid,
         },
-        {
+        {   /* 6 */
             .mToken = "password",
             .mGet = NULL,
             .mSet = esp8266_http_test_web_content_set_password,
         },
-        {
+        {   /* 7 */
             .mToken = "ani",
             .mGet = NULL,
             .mSet = esp8266_http_test_web_content_set_animation,
         },
-        {
+        {   /* 8 */
             .mToken = "ancol",
             .mGet = NULL,
             .mSet = esp8266_http_test_web_content_set_color,
         },
-        {
+        {   /* 9 */
+            .mToken = "ancol1",
+            .mGet = NULL,
+            .mSet = esp8266_http_test_web_content_set_color1,
+        },
+        {   /* 10 */
             .mToken = "tra",
             .mGet = NULL,
             .mSet = esp8266_http_test_web_content_set_transition,
         },
-        {
+        {   /* 11 */
             .mToken = "trtime",
             .mGet = NULL,
             .mSet = esp8266_http_test_web_content_set_transition_time,
