@@ -276,6 +276,11 @@ void ws2812_animation_main(void) {
         /* check if there are new transition commands */
         if(xQueueReceive(sAnimationControl.mMsgQueue, &sAnimationControl.mLastCommand, lDelay)) {
 
+            /* wait if neccessary */
+            if(!xTaskCheckForTimeOut(&sAnimationControl.mTimeout, &lDelay)) {
+                vTaskDelay(lDelay);
+            }
+
             /* if we received a command, go to transition state */
             sAnimationControl.mState = WS2812_ANIM_STATE_TRANSIT;
             sTransitionInitFuncs[sAnimationControl.mLastCommand.mTransition](&sAnimationControl.mTransition, &sAnimationControl.mLastCommand.mTransParam);
