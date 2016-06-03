@@ -46,7 +46,7 @@ void ws2812_init(void);
 /*!
     Send the update to the leds
 */
-void ws2812_updateLED(color_f * inPanel);
+void ws2812_updateLED(color * inPanel);
 
 // ----------------------------- graphics -----------------------------
 /*!
@@ -58,7 +58,7 @@ void ws2812_updateLED(color_f * inPanel);
     \param[in]  g   Green part of the color
     \param[in]  b   Blue part of the color
 */
-void ws2812_setLED(color_f * inPanel, size_t inRow, size_t inColumn, uint8_t r, uint8_t g, uint8_t b);
+void ws2812_setLED(color * inPanel, size_t inRow, size_t inColumn, uint8_t r, uint8_t g, uint8_t b);
 
 /*!
     Set all pixels of one column to a color
@@ -68,7 +68,7 @@ void ws2812_setLED(color_f * inPanel, size_t inRow, size_t inColumn, uint8_t r, 
     \param[in]  g   Green part of the color
     \param[in]  b   Blue part of the color
 */
-void ws2812_setLED_Column(color_f * inPanel, size_t inColumn, uint8_t r, uint8_t g, uint8_t b);
+void ws2812_setLED_Column(color * inPanel, size_t inColumn, uint8_t r, uint8_t g, uint8_t b);
 
 /*!
     Set all pixels of one row to a color
@@ -78,7 +78,7 @@ void ws2812_setLED_Column(color_f * inPanel, size_t inColumn, uint8_t r, uint8_t
     \param[in]  g   Green part of the color
     \param[in]  b   Blue part of the color
 */
-void ws2812_setLED_Row(color_f * inPanel, size_t inRow, uint8_t r, uint8_t g, uint8_t b);
+void ws2812_setLED_Row(color * inPanel, size_t inRow, uint8_t r, uint8_t g, uint8_t b);
 
 /*!
     Set all leds by using a specific rgb color
@@ -87,7 +87,7 @@ void ws2812_setLED_Row(color_f * inPanel, size_t inRow, uint8_t r, uint8_t g, ui
     \param[in]  g   Green part of the color
     \param[in]  b   Blue part of the color
 */
-void ws2812_setLED_All(color_f * inPanel, uint8_t r, uint8_t g, uint8_t b);
+void ws2812_setLED_All(color * inPanel, uint8_t r, uint8_t g, uint8_t b);
 
 /*!
     Get the number of leds in one row

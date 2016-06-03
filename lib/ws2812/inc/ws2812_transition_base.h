@@ -3,8 +3,6 @@
 
 #include "ws2812.h"     // for color_f
 
-#include "ws2812_anim_base.h"   // for tu_ws2812_anim
-
 union u_ws2812_trans;
 typedef union u_ws2812_trans tu_ws2812_trans;
 
@@ -15,10 +13,10 @@ typedef union u_ws2812_trans_param tu_ws2812_trans_param;
 typedef struct {
 
     /*! update function */
-    void        (* mfUpdate)(tu_ws2812_trans * pThis, tu_ws2812_anim * pAnimationOne, tu_ws2812_anim * pAnimationTwo);
+    void        (* mfUpdate)(tu_ws2812_trans * pThis, color * pAnimationOne, color * pAnimationTwo);
 
     /*! Panel to paint on */
-    color_f        mPanel[WS2812_NR_ROWS * WS2812_NR_COLUMNS];
+    color          mPanel[WS2812_NR_ROWS * WS2812_NR_COLUMNS];
 
 } ts_ws2812_trans_base;
 

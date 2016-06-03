@@ -11,15 +11,17 @@
 #include "ws2812_transition_fade.h"
 
 
+#define REGULARIZE_COLOR(x) ((uint8_t)((x > 255.0f)? 255 : ((x < 0.0f)? 0: x + 0.5f)))
 
-static void ws2812_trans_fade_update(tu_ws2812_trans * pThis, tu_ws2812_anim * pAnimationOne, tu_ws2812_anim * pAnimationTwo) {
+
+static void ws2812_trans_fade_update(tu_ws2812_trans * pThis, color * pAnimationOne, color * pAnimationTwo) {
 
     size_t lColumnCount;
     size_t lRowCount;
 
     float lPercentage;
 
-    lPercentage = (float)++pThis->mFade.mElapsed / (float)pThis->mFade.mDuration;
+    lPercentage = (float)(++pThis->mFade.mElapsed) / (float)pThis->mFade.mDuration;
 
     /* update all colors */
     for(lColumnCount = 0; lColumnCount < WS2812_NR_COLUMNS; lColumnCount++) {
@@ -27,9 +29,13 @@ static void ws2812_trans_fade_update(tu_ws2812_trans * pThis, tu_ws2812_anim * p
 
             size_t lLedIndex = lRowCount * WS2812_NR_COLUMNS + lColumnCount;
 
-            pThis->mBase.mPanel[lLedIndex].R = (1.0f - lPercentage) * pAnimationOne->mBase.mPanel[lLedIndex].R + (lPercentage) * pAnimationTwo->mBase.mPanel[lLedIndex].R;
-            pThis->mBase.mPanel[lLedIndex].G = (1.0f - lPercentage) * pAnimationOne->mBase.mPanel[lLedIndex].G + (lPercentage) * pAnimationTwo->mBase.mPanel[lLedIndex].G;
-            pThis->mBase.mPanel[lLedIndex].B = (1.0f - lPercentage) * pAnimationOne->mBase.mPanel[lLedIndex].B + (lPercentage) * pAnimationTwo->mBase.mPanel[lLedIndex].B;
+            float r = ((1.0f - lPercentage) * pAnimationOne[lLedIndex].R + (lPercentage) * pAnimationTwo[lLedIndex].R);
+            float g = ((1.0f - lPercentage) * pAnimationOne[lLedIndex].G + (lPercentage) * pAnimationTwo[lLedIndex].G);
+            float b = ((1.0f - lPercentage) * pAnimationOne[lLedIndex].B + (lPercentage) * pAnimationTwo[lLedIndex].B);
+
+            pThis->mBase.mPanel[lLedIndex].R = REGULARIZE_COLOR(r);
+            pThis->mBase.mPanel[lLedIndex].G = REGULARIZE_COLOR(g);
+            pThis->mBase.mPanel[lLedIndex].B = REGULARIZE_COLOR(b);
         }
     }
 

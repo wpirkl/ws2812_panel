@@ -6,6 +6,7 @@
 #include "ws2812.h"   // for color_f and WS2812_NR_ROWS, WS2812_NR_COLUMNS
 
 #include "ws2812_anim_obj.h"
+#include "ws2812_modifier_obj.h"
 #include "ws2812_transition_obj.h"
 
 #include "ws2812_anim.h"
@@ -162,8 +163,53 @@ void ws2812_animation_init(void) {
     sAnimationControl.mLastCommand.mAnimParam.mConstantColor.mColor.G = 0;
     sAnimationControl.mLastCommand.mAnimParam.mConstantColor.mColor.B = 0;
 
+    /* clean init of modifier */
+    sAnimationControl.mAnimation[sAnimationControl.mCurrentAnimation].mBase.mModifier = NULL;
+
     /* initialize animation */
     sAnimationInitFuncs[sAnimationControl.mLastCommand.mAnimation](&sAnimationControl.mAnimation[sAnimationControl.mCurrentAnimation], &sAnimationControl.mLastCommand.mAnimParam);
+}
+
+
+static void ws2812_animation_update(tu_ws2812_anim * pThis) {
+
+    color * lPanel;
+    tu_ws2812_modifier * lModifier;
+
+    pThis->mBase.mfUpdate(pThis);
+
+    /* iterate over all modifiers */
+    for(lPanel = pThis->mBase.mPanel,     lModifier = pThis->mBase.mModifier;
+        lModifier != NULL;
+        lPanel = lModifier->mBase.mPanel, lModifier = lModifier->mBase.mModifier) {
+
+        /* run current modifier */
+        lModifier->mBase.mfUpdate(lModifier, lPanel);
+    }
+}
+
+
+static color * ws2812_animation_get_modifier_panel(tu_ws2812_modifier * pThis) {
+
+    tu_ws2812_modifier * lModifier;
+
+    /* find last modifier */
+    for(lModifier = pThis; lModifier->mBase.mModifier != NULL; lModifier = lModifier->mBase.mModifier);
+
+    /* return it's panel */
+    return lModifier->mBase.mPanel;
+}
+
+
+static color * ws2812_animation_get_panel(tu_ws2812_anim * pThis) {
+
+    if(pThis->mBase.mModifier != NULL) {
+
+        return ws2812_animation_get_modifier_panel(pThis->mBase.mModifier);
+    } else {
+
+        return pThis->mBase.mPanel;
+    }
 }
 
 
@@ -189,14 +235,14 @@ void ws2812_animation_main(void) {
         case WS2812_ANIM_STATE_TRANSIT: {
 
                 /* run animation 1 */
-                sAnimationControl.mAnimation[sAnimationControl.mCurrentAnimation].mBase.mfUpdate(&sAnimationControl.mAnimation[sAnimationControl.mCurrentAnimation]);
+                ws2812_animation_update(&sAnimationControl.mAnimation[sAnimationControl.mCurrentAnimation]);
 
                 /* run animation 2 */
-                sAnimationControl.mAnimation[(sAnimationControl.mCurrentAnimation + 1) & 1].mBase.mfUpdate(&sAnimationControl.mAnimation[(sAnimationControl.mCurrentAnimation + 1) & 1]);
+                ws2812_animation_update(&sAnimationControl.mAnimation[(sAnimationControl.mCurrentAnimation + 1) & 1]);
 
                 sAnimationControl.mTransition.mBase.mfUpdate(&sAnimationControl.mTransition,
-                                                              &sAnimationControl.mAnimation[sAnimationControl.mCurrentAnimation],
-                                                              &sAnimationControl.mAnimation[(sAnimationControl.mCurrentAnimation + 1) & 1]);
+                                                             ws2812_animation_get_panel(&sAnimationControl.mAnimation[sAnimationControl.mCurrentAnimation]),
+                                                             ws2812_animation_get_panel(&sAnimationControl.mAnimation[(sAnimationControl.mCurrentAnimation + 1) & 1]));
 
                 /* update led from transition buffer */
                 ws2812_updateLED(sAnimationControl.mTransition.mBase.mPanel);
@@ -236,6 +282,9 @@ void ws2812_animation_main(void) {
 
             /* init second animation */
             sAnimationInitFuncs[sAnimationControl.mLastCommand.mAnimation](&sAnimationControl.mAnimation[(sAnimationControl.mCurrentAnimation + 1) & 1], &sAnimationControl.mLastCommand.mAnimParam);
+
+            /* clean init of modifier */
+            sAnimationControl.mAnimation[(sAnimationControl.mCurrentAnimation + 1) & 1].mBase.mModifier = NULL;
         }
     }
 }

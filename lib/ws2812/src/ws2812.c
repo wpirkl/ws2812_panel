@@ -82,7 +82,7 @@ static const ts_skip_leds sSkipRow3 = {
     .mSkipLen = 6,
 };
 
-static color_f * sUpdatePanel = NULL;
+static color * sUpdatePanel = NULL;
 
 static const ts_led_panel sLedPanel[WS2812_NR_ROWS] = {
     {
@@ -139,7 +139,7 @@ static inline size_t isLedSkipped(size_t inLedRow, size_t inLedColumn) {
     return 0;
 }
 
-void ws2812_setLED(color_f * inPanel, size_t inRow, size_t inColumn, uint8_t r, uint8_t g, uint8_t b) {
+void ws2812_setLED(color * inPanel, size_t inRow, size_t inColumn, uint8_t r, uint8_t g, uint8_t b) {
 
     assert_param(inRow < WS2812_NR_ROWS);
     assert_param(inColumn < WS2812_NR_COLUMNS);
@@ -149,12 +149,12 @@ void ws2812_setLED(color_f * inPanel, size_t inRow, size_t inColumn, uint8_t r, 
         return;
     }
 
-    inPanel[sLedPanel[inRow].mLeds + inColumn].R = (float)r / 255.0f;
-    inPanel[sLedPanel[inRow].mLeds + inColumn].G = (float)g / 255.0f;
-    inPanel[sLedPanel[inRow].mLeds + inColumn].B = (float)b / 255.0f;
+    inPanel[sLedPanel[inRow].mLeds + inColumn].R = r;
+    inPanel[sLedPanel[inRow].mLeds + inColumn].G = g;
+    inPanel[sLedPanel[inRow].mLeds + inColumn].B = b;
 }
 
-void ws2812_setLED_Column(color_f * inPanel, size_t inColumn, uint8_t r, uint8_t g, uint8_t b) {
+void ws2812_setLED_Column(color * inPanel, size_t inColumn, uint8_t r, uint8_t g, uint8_t b) {
 
     size_t lRowNum = ws2812_getLED_PanelNumberOfRows();
     size_t lRowCount;
@@ -164,7 +164,7 @@ void ws2812_setLED_Column(color_f * inPanel, size_t inColumn, uint8_t r, uint8_t
     }
 }
 
-void ws2812_setLED_Row(color_f * inPanel, size_t inRow, uint8_t r, uint8_t g, uint8_t b) {
+void ws2812_setLED_Row(color * inPanel, size_t inRow, uint8_t r, uint8_t g, uint8_t b) {
 
     size_t lColumnNum = ws2812_getLED_PanelNumberOfColumns();
     size_t lColumnCount;
@@ -174,7 +174,7 @@ void ws2812_setLED_Row(color_f * inPanel, size_t inRow, uint8_t r, uint8_t g, ui
     }
 }
 
-void ws2812_setLED_All(color_f * inPanel, uint8_t r, uint8_t g, uint8_t b){
+void ws2812_setLED_All(color * inPanel, uint8_t r, uint8_t g, uint8_t b){
 
     size_t lRowCount;
     size_t lColumnCount;
@@ -186,9 +186,9 @@ void ws2812_setLED_All(color_f * inPanel, uint8_t r, uint8_t g, uint8_t b){
             lColumnCount += isLedSkipped(lRowCount, lColumnCount);
 
             if(lColumnCount < WS2812_NR_COLUMNS) {
-                inPanel[sLedPanel[lRowCount].mLeds + lColumnCount].R = (float)r / 255.0f;
-                inPanel[sLedPanel[lRowCount].mLeds + lColumnCount].G = (float)g / 255.0f;
-                inPanel[sLedPanel[lRowCount].mLeds + lColumnCount].B = (float)b / 255.0f;
+                inPanel[sLedPanel[lRowCount].mLeds + lColumnCount].R = r;
+                inPanel[sLedPanel[lRowCount].mLeds + lColumnCount].G = g;
+                inPanel[sLedPanel[lRowCount].mLeds + lColumnCount].B = b;
             }
         }
     }
@@ -662,9 +662,9 @@ static inline void fillBuffer(size_t inRow) {
         if(lIndex < WS2812_NR_COLUMNS) {
 
             color lColor;
-            lColor.R = (uint8_t)(255.0f * sUpdatePanel[sLedPanel[inRow].mLeds + lIndex].R);
-            lColor.G = (uint8_t)(255.0f * sUpdatePanel[sLedPanel[inRow].mLeds + lIndex].G);
-            lColor.B = (uint8_t)(255.0f * sUpdatePanel[sLedPanel[inRow].mLeds + lIndex].B);
+            lColor.R = sUpdatePanel[sLedPanel[inRow].mLeds + lIndex].R;
+            lColor.G = sUpdatePanel[sLedPanel[inRow].mLeds + lIndex].G;
+            lColor.B = sUpdatePanel[sLedPanel[inRow].mLeds + lIndex].B;
 
             /* decode colors to pwm duty cycles */
             for(lBitMask = 0x80, lBitIndex = 0; lBitMask != 0; lBitMask >>= 1, lBitIndex++) {
@@ -710,7 +710,7 @@ static inline void fillBuffer(size_t inRow) {
     sLedDMA[inRow].mDmaBufferIndex = incrementBufferIndex(lDmaBufferIndexCache);
 }
 
-void ws2812_updateLED(color_f * inPanel){
+void ws2812_updateLED(color * inPanel){
 
     size_t lRow;
 
