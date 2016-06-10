@@ -2,7 +2,7 @@
 #define WS2812_MODIFIER_BASE_H_
 
 
-#include "ws2812.h"     // for color / color_f
+#include "color.h"     // for color / color_f
 
 union u_ws2812_modifier;
 typedef union u_ws2812_modifier tu_ws2812_modifier;

@@ -2,6 +2,7 @@
 #define WS2812_ANIM_H_
 
 #include <stdint.h>     // uint8_t
+#include "color_palette.h"
 
 
 /*! Initialize Animation */
@@ -39,6 +40,13 @@ void ws2812_anim_const_color(uint8_t inRed, uint8_t inGreen, uint8_t inBlue);
 void ws2812_anim_gradient(uint8_t inFirstRed,  uint8_t inFirstGreen,  uint8_t inFirstBlue,
                           uint8_t inSecondRed, uint8_t inSecondGreen, uint8_t inSecondBlue,
                           int16_t inAngle);
+
+
+/*! This function will switch to palette mode
+
+    \param[in]  inPalette   The palette to display
+*/
+void ws2812_anim_palette(te_color_palettes inPalette);
 
 
 #endif /* WS2812_ANIM_H_ */

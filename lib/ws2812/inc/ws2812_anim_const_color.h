@@ -4,7 +4,7 @@
 #include <stdint.h>
 #include <stdbool.h>
 
-#include "ws2812.h"             // for color
+#include "color.h"             // for color
 
 #include "ws2812_anim_base.h"
 

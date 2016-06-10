@@ -2,7 +2,7 @@
 #define WS2812_ANIM_BASE_H_
 
 
-#include "ws2812.h"                 // for color / color_f
+#include "color.h"                  // for color / color_f
 #include "ws2812_modifier_obj.h"    // for tu_ws2812_modifier
 
 union u_ws2812_anim;

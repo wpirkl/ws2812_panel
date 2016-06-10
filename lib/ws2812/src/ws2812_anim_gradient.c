@@ -2,7 +2,7 @@
 #include "ws2812.h"
 
 #include "ws2812_anim_obj.h"
-#include "ws2812_anim_const_color.h"
+#include "ws2812_anim_gradient.h"
 
 
 static void ws2812_anim_gradient_update(tu_ws2812_anim * pThis) {

@@ -54,16 +54,18 @@ LIBS += http
 LIBS += paho
 LIBS += stdperiph
 LIBS += freertos
+LIBS += color_tools
 
-LIBPATH_usbdevcore = $(LIBPATH)/USB_Device/Core
-LIBPATH_usbdevcdc  = $(LIBPATH)/USB_Device/Class/cdc
-LIBPATH_usbcore    = $(LIBPATH)/USB_OTG
-LIBPATH_ws2812     = $(LIBPATH)/ws2812
-LIBPATH_esp8266    = $(LIBPATH)/esp8266
-LIBPATH_http       = $(LIBPATH)/http
-LIBPATH_paho       = $(LIBPATH)/paho
-LIBPATH_stdperiph  = $(LIBPATH)/StdPeriph
-LIBPATH_freertos   = $(LIBPATH)/FreeRTOS
+LIBPATH_color_tools = $(LIBPATH)/color_tools
+LIBPATH_usbdevcore  = $(LIBPATH)/USB_Device/Core
+LIBPATH_usbdevcdc   = $(LIBPATH)/USB_Device/Class/cdc
+LIBPATH_usbcore     = $(LIBPATH)/USB_OTG
+LIBPATH_ws2812      = $(LIBPATH)/ws2812
+LIBPATH_esp8266     = $(LIBPATH)/esp8266
+LIBPATH_http        = $(LIBPATH)/http
+LIBPATH_paho        = $(LIBPATH)/paho
+LIBPATH_stdperiph   = $(LIBPATH)/StdPeriph
+LIBPATH_freertos    = $(LIBPATH)/FreeRTOS
 
 # concatenate all library paths
 LIB = $(addprefix -L,$(foreach lib,$(LIBS),$(LIBPATH_$(lib)))) $(addprefix -l,$(LIBS))

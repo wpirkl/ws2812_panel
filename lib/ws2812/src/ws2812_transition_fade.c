@@ -2,7 +2,8 @@
 
 #include "FreeRTOS.h"
 
-#include "ws2812.h"             // for color_f
+#include "ws2812.h"
+#include "color.h"              // for color
 
 #include "ws2812_anim_p.h"      // for ws2812_transition_done
 #include "ws2812_anim_obj.h"    // for tu_ws2812_anim

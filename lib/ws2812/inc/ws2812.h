@@ -4,6 +4,7 @@
 #include <stdint.h>
 #include <stdio.h>
 
+#include "color.h"
 
 //------------------------------ defines ------------------------------
 
@@ -15,26 +16,7 @@
 
 //------------------------------ structs ------------------------------
 
-/*! This structure defines an RGB color, 8bit per color */
-typedef struct {
-    /*! Red part of the color */
-    uint8_t R;
-    /*! Green part of the color */
-    uint8_t G;
-    /*! Blue part of the color */
-    uint8_t B;
-} color;
 
-
-/*! This structure defines an RGB color in float per color */
-typedef struct {
-    /*! Red part of the color */
-    float R;
-    /*! Green part of the color */
-    float G;
-    /*! Blue part of the color */
-    float B;
-} color_f;
 
 // ----------------------------- functions -----------------------------
 

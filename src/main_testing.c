@@ -16,6 +16,8 @@
 
 #include "init.h"
 
+#include "color_palette.h"
+
 #include "ws2812.h"
 #include "ws2812_anim.h"
 
@@ -849,6 +851,9 @@ typedef struct {
     /*! Color1 */
     color       mColor1;
 
+    /*! Palette */
+    te_color_palettes   mPalette;
+
 } ts_myUserData;
 
 static ts_myUserData sUserData = {
@@ -1045,6 +1050,28 @@ bool esp8266_http_test_web_content_set_color1(void * inUserData, const char * co
     return esp8266_http_test_web_content_parse_color(&lUserData->mColor1, inValue, inValueLength);
 }
 
+bool esp8266_http_test_web_content_set_palette(void * inUserData, const char * const inValue, size_t inValueLength) {
+
+    ts_myUserData * lUserData = (ts_myUserData*)inUserData;
+
+    uint32_t lPal = 0;
+    size_t lCount;
+
+    for(lCount = inValueLength; lCount > 0; lCount--) {
+        lPal = lPal * 10 + (inValue[lCount] - '0');
+    }
+
+    if(lPal < COLOR_PALETTE_NUM) {
+
+        lUserData->mPalette = lPal;
+
+    } else {
+        lUserData->mPalette = 0;
+    }
+
+    return true;
+}
+
 bool esp8266_http_test_web_content_set_transition(void * inUserData, const char * const inValue, size_t inValueLength) {
 
     char lBuffer[12];
@@ -1120,11 +1147,18 @@ void esp8266_http_test_web_content_done_parse(void * inUserData) {
 
         switch(lUserData->mAnimation) {
             case 0:     /* constant color */
-
                 printf("%s(%d): Animation constant color\r\n", __FILE__, __LINE__);
                 ws2812_anim_const_color(lUserData->mColor.R, lUserData->mColor.G, lUserData->mColor.B);
                 break;
+            case 1:     /* gradient */
+                printf("%s(%d): Animation gradient\r\n", __FILE__, __LINE__);
+                break;
+            case 2:     /* palette */
+                printf("%s(%d): Animation palette\r\n", __FILE__, __LINE__);
+                ws2812_anim_palette(lUserData->mPalette);
+                break;
             default:    /* unkonwn animation */
+                printf("%s(%d): Unknown animation\r\n", __FILE__, __LINE__);
                 break;
         }
 
@@ -1137,7 +1171,7 @@ void esp8266_http_test_web_content_done_parse(void * inUserData) {
 
 const ts_web_content_handlers g_WebContentHandler = {
 
-    .mHandlerCount = 12,
+    .mHandlerCount = 13,
     .mParsingStart = esp8266_http_test_web_content_start_parse,
     .mParsingDone  = esp8266_http_test_web_content_done_parse,
     .mUserData = (void*)&sUserData,
@@ -1201,6 +1235,11 @@ const ts_web_content_handlers g_WebContentHandler = {
             .mToken = "trtime",
             .mGet = NULL,
             .mSet = esp8266_http_test_web_content_set_transition_time,
+        },
+        {   /* 12 */
+            .mToken = "anpal",
+            .mGet = NULL,
+            .mSet = esp8266_http_test_web_content_set_palette,
         }
     }
 };

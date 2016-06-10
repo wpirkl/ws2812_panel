@@ -3,7 +3,8 @@
 #include <stdio.h>      // for dbg
 #include <string.h>     // for memcpy
 
-#include "ws2812.h"   // for color_f and WS2812_NR_ROWS, WS2812_NR_COLUMNS
+#include "ws2812.h"   // for WS2812_NR_ROWS, WS2812_NR_COLUMNS
+#include "color.h"    // for color / color_f
 
 #include "ws2812_anim_obj.h"
 #include "ws2812_modifier_obj.h"
@@ -65,6 +66,9 @@ typedef enum {
 
     /*! Gradient animation */
     WS2812_ANIMATION_GRADIENT,
+
+    /*! Palette animation */
+    WS2812_ANIMATION_PALETTE,
 
 } te_ws2812_animations;
 
@@ -134,6 +138,7 @@ static const f_ws2812_anim_init sAnimationInitFuncs[] = {
 
     [WS2812_ANIMATION_CONSTANT_COLOR] = ws2812_anim_const_color_init,
     [WS2812_ANIMATION_GRADIENT]       = ws2812_anim_gradient_init,
+    [WS2812_ANIMATION_PALETTE]        = ws2812_anim_color_palette_init,
 };
 
 
@@ -328,6 +333,21 @@ void ws2812_anim_gradient(uint8_t inFirstRed, uint8_t inFirstGreen, uint8_t inFi
     lCommand.mAnimParam.mGradient.mSecondColor.B = inSecondBlue;
 
     lCommand.mAnimParam.mGradient.mAngle = inAngle;
+
+    /*! todo: use configured transition */
+    lCommand.mTransition = WS2812_TRANSITION_FADE;
+    lCommand.mTransParam.mFade.mDuration = 1000 / WS2812_ANIMATION_DELAY_MS;    // 1000ms @ 100 Hz
+
+    xQueueSend(sAnimationControl.mMsgQueue, &lCommand, portMAX_DELAY );
+}
+
+
+void ws2812_anim_palette(te_color_palettes inPalette) {
+
+    ts_ws2812_anim_ctrl_cmd lCommand;
+
+    lCommand.mAnimation = WS2812_ANIMATION_GRADIENT;
+    lCommand.mAnimParam.mPalette.mPalette = inPalette;
 
     /*! todo: use configured transition */
     lCommand.mTransition = WS2812_TRANSITION_FADE;

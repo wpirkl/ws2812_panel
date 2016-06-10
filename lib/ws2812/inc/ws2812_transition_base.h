@@ -1,7 +1,7 @@
 #ifndef WS2812_TRANSITION_BASE_H_
 #define WS2812_TRANSITION_BASE_H_
 
-#include "ws2812.h"     // for color_f
+#include "color.h"     // for color_f
 
 union u_ws2812_trans;
 typedef union u_ws2812_trans tu_ws2812_trans;
