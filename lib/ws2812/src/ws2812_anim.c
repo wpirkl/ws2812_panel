@@ -346,7 +346,7 @@ void ws2812_anim_palette(te_color_palettes inPalette) {
 
     ts_ws2812_anim_ctrl_cmd lCommand;
 
-    lCommand.mAnimation = WS2812_ANIMATION_GRADIENT;
+    lCommand.mAnimation = WS2812_ANIMATION_PALETTE;
     lCommand.mAnimParam.mPalette.mPalette = inPalette;
 
     /*! todo: use configured transition */

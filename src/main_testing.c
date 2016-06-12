@@ -1057,7 +1057,7 @@ bool esp8266_http_test_web_content_set_palette(void * inUserData, const char * c
     uint32_t lPal = 0;
     size_t lCount;
 
-    for(lCount = inValueLength; lCount > 0; lCount--) {
+    for(lCount = 0; lCount < inValueLength; lCount++) {
         lPal = lPal * 10 + (inValue[lCount] - '0');
     }
 
@@ -1154,7 +1154,7 @@ void esp8266_http_test_web_content_done_parse(void * inUserData) {
                 printf("%s(%d): Animation gradient\r\n", __FILE__, __LINE__);
                 break;
             case 2:     /* palette */
-                printf("%s(%d): Animation palette\r\n", __FILE__, __LINE__);
+                printf("%s(%d): Animation palette (%d)\r\n", __FILE__, __LINE__, lUserData->mPalette);
                 ws2812_anim_palette(lUserData->mPalette);
                 break;
             default:    /* unkonwn animation */
