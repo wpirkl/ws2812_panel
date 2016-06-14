@@ -70,6 +70,9 @@ typedef enum {
     /*! Palette animation */
     WS2812_ANIMATION_PALETTE,
 
+    /*! Fire animation */
+    WS2812_ANIMATION_FIRE,
+
 } te_ws2812_animations;
 
 
@@ -139,6 +142,7 @@ static const f_ws2812_anim_init sAnimationInitFuncs[] = {
     [WS2812_ANIMATION_CONSTANT_COLOR] = ws2812_anim_const_color_init,
     [WS2812_ANIMATION_GRADIENT]       = ws2812_anim_gradient_init,
     [WS2812_ANIMATION_PALETTE]        = ws2812_anim_color_palette_init,
+    [WS2812_ANIMATION_FIRE]           = ws2812_anim_fire_init,
 };
 
 
@@ -348,6 +352,21 @@ void ws2812_anim_palette(te_color_palettes inPalette) {
 
     lCommand.mAnimation = WS2812_ANIMATION_PALETTE;
     lCommand.mAnimParam.mPalette.mPalette = inPalette;
+
+    /*! todo: use configured transition */
+    lCommand.mTransition = WS2812_TRANSITION_FADE;
+    lCommand.mTransParam.mFade.mDuration = 1000 / WS2812_ANIMATION_DELAY_MS;    // 1000ms @ 100 Hz
+
+    xQueueSend(sAnimationControl.mMsgQueue, &lCommand, portMAX_DELAY );
+}
+
+
+void ws2812_anim_fire(te_color_palettes inPalette) {
+
+    ts_ws2812_anim_ctrl_cmd lCommand;
+
+    lCommand.mAnimation = WS2812_ANIMATION_FIRE;
+    lCommand.mAnimParam.mFire.mPalette = inPalette;
 
     /*! todo: use configured transition */
     lCommand.mTransition = WS2812_TRANSITION_FADE;

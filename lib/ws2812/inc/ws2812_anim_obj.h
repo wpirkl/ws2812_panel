@@ -8,6 +8,7 @@
 #include "ws2812_anim_const_color.h"
 #include "ws2812_anim_gradient.h"
 #include "ws2812_anim_color_palette.h"
+#include "ws2812_anim_fire.h"
 
 /*! Animation object definition */
 union u_ws2812_anim {
@@ -23,6 +24,9 @@ union u_ws2812_anim {
 
     /*! Palette */
     ts_ws2812_anim_color_palette    mPalette;
+
+    /*! Fire */
+    ts_ws2812_anim_fire             mFire;
 };
 
 
@@ -37,6 +41,9 @@ union u_ws2812_anim_param {
 
     /*! Parameters for Palette */
     ts_ws2812_anim_param_color_palette  mPalette;
+
+    /*! Parameters for Fire */
+    ts_ws2812_anim_param_fire           mFire;
 };
 
 

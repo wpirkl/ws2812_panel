@@ -5,6 +5,7 @@ SRCS += ws2812_anim.c
 SRCS += ws2812_anim_const_color.c
 SRCS += ws2812_anim_gradient.c
 SRCS += ws2812_anim_color_palette.c
+SRCS += ws2812_anim_fire.c
 SRCS += ws2812_transition_fade.c
 
 

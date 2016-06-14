@@ -1157,6 +1157,10 @@ void esp8266_http_test_web_content_done_parse(void * inUserData) {
                 printf("%s(%d): Animation palette (%d)\r\n", __FILE__, __LINE__, lUserData->mPalette);
                 ws2812_anim_palette(lUserData->mPalette);
                 break;
+            case 3:     /* fire */
+                printf("%s(%d): Animation fire (%d)\r\n", __FILE__, __LINE__, lUserData->mPalette);
+                
+                break;
             default:    /* unkonwn animation */
                 printf("%s(%d): Unknown animation\r\n", __FILE__, __LINE__);
                 break;

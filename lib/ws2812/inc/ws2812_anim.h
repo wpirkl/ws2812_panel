@@ -49,6 +49,13 @@ void ws2812_anim_gradient(uint8_t inFirstRed,  uint8_t inFirstGreen,  uint8_t in
 void ws2812_anim_palette(te_color_palettes inPalette);
 
 
+/*! This function will switch to fire animation
+
+    \param[in]  inPalette   The palette to use
+*/
+void ws2812_anim_fire(te_color_palettes inPalette);
+
+
 #endif /* WS2812_ANIM_H_ */
 
 /* eof */

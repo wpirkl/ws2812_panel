@@ -55,8 +55,10 @@ LIBS += paho
 LIBS += stdperiph
 LIBS += freertos
 LIBS += color_tools
+LIBS += math_tools
 
 LIBPATH_color_tools = $(LIBPATH)/color_tools
+LIBPATH_math_tools  = $(LIBPATH)/math_tools
 LIBPATH_usbdevcore  = $(LIBPATH)/USB_Device/Core
 LIBPATH_usbdevcdc   = $(LIBPATH)/USB_Device/Class/cdc
 LIBPATH_usbcore     = $(LIBPATH)/USB_OTG
