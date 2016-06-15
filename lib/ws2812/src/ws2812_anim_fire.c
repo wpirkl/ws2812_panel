@@ -1,5 +1,6 @@
 #include <stdlib.h>
 #include <string.h>
+#include <stdio.h>
 
 #include "ws2812.h"
 
@@ -11,10 +12,10 @@
 
 
 #define MAX_HEAT    (240)
-#define MAX_HEAT_UP (30)
-#define MIN_HEAT_UP (10)
-#define MAX_COOLING (60)
-#define MIN_COOLING (20)
+#define MAX_HEAT_UP (120)
+#define MIN_HEAT_UP (40)
+#define MAX_COOLING (30)
+#define MIN_COOLING (0)
 
 
 /*! This function cools everything a bit down */
@@ -169,13 +170,16 @@ static void ws2812_anim_fire_update(tu_ws2812_anim * pThis) {
 
 void ws2812_anim_fire_init(tu_ws2812_anim * pThis, tu_ws2812_anim_param * pParam) {
 
+	printf("%s(%d): init\r\n", __FILE__, __LINE__);
     pThis->mBase.mfUpdate   = ws2812_anim_fire_update;
     pThis->mFire.mPalette   = pParam->mFire.mPalette;
 
     pThis->mFire.mHeat = (uint8_t*)malloc(WS2812_NR_ROWS * WS2812_NR_COLUMNS);
     if(pThis->mFire.mHeat) {
         memset(pThis->mFire.mHeat, 0, WS2812_NR_ROWS * WS2812_NR_COLUMNS);
-    }
+    } else {
+		printf("%s(%d): malloc failed!\r\n", __FILE__, __LINE__);
+	}
 }
 
 
