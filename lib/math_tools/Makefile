@@ -1,6 +1,6 @@
 
 # Sources
-SRCS += random.c
+SRCS += mt_random.c
 
 
 # Config

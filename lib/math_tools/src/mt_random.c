@@ -1,7 +1,7 @@
 
 #include <stdio.h>
 
-#include "random.h"
+#include "mt_random.h"
 
 
 static uint8_t y8 = 1;
