@@ -20,6 +20,7 @@ CFLAGS += -I../Core/stm32
 CFLAGS += -I../StdPeriph/inc
 CFLAGS += -I../FreeRTOS/inc
 CFLAGS += -I../color_tools/inc
+CFLAGS += -I../math_tools/inc
 
 #output name
 LIBNAME = libws2812.a

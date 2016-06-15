@@ -17,6 +17,9 @@ typedef struct {
     /*! color palette */
     te_color_palettes       mPalette;
 
+    /*! heat map */
+    uint8_t               * mHeat;
+
 } ts_ws2812_anim_fire;
 
 
@@ -30,14 +33,12 @@ typedef struct {
 
 
 
-/*! Initialize fire animation
-
-    \param[in]  inColor     The color to show
-*/
+/*! Initialize fire animation */
 void ws2812_anim_fire_init(tu_ws2812_anim * pThis, tu_ws2812_anim_param * pParam);
 
 
-
+/*! Cleanup fire animation */
+void ws2812_anim_fire_clean(tu_ws2812_anim * pThis);
 
 
 

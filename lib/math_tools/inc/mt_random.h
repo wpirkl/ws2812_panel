@@ -33,6 +33,33 @@ uint32_t xorshift32(void);
 uint64_t xorshift64(void);
 
 
+/*! Generate 8 bit random number with limit
+
+    \return 8bit random number from 1 to n
+*/
+static inline uint8_t xorshift8_lim(uint8_t inLimit) {
+
+    uint16_t lRandom = xorshift8();
+
+    lRandom = (lRandom * (uint16_t)inLimit) >> 8;
+
+    return (uint8_t)lRandom;
+}
+
+
+/*! Generate 8 bit random number with limit
+
+    \return 8bit random number from inMin to inMax
+*/
+static inline uint8_t xorshift8_range(uint8_t inMin, uint8_t inMax) {
+
+    uint16_t lRandom = xorshift8();
+    uint16_t lDelta = inMax - inMin;
+
+    lRandom = ((lRandom * (uint16_t)lDelta) >> 8) + inMin;
+
+    return (uint8_t)lRandom;
+}
 
 
 

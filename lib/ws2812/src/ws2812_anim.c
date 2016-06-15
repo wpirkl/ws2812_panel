@@ -145,6 +145,15 @@ static const f_ws2812_anim_init sAnimationInitFuncs[] = {
     [WS2812_ANIMATION_FIRE]           = ws2812_anim_fire_init,
 };
 
+/*! Animation cleanup functions */
+static const f_ws2812_anim_clean sAnimationCleanFuncs[] = {
+
+    [WS2812_ANIMATION_CONSTANT_COLOR] = NULL,
+    [WS2812_ANIMATION_GRADIENT]       = NULL,
+    [WS2812_ANIMATION_PALETTE]        = NULL,
+    [WS2812_ANIMATION_FIRE]           = ws2812_anim_fire_clean,
+};
+
 
 /*! Transition initialization functions */
 static const f_ws2812_trans_init sTransitionInitFuncs[] = {
@@ -223,6 +232,12 @@ static color * ws2812_animation_get_panel(tu_ws2812_anim * pThis) {
 
 
 void ws2812_transition_done(void) {
+
+    /* cleanup */
+    if(sAnimationCleanFuncs[sAnimationControl.mCurrentAnimation]) {
+
+        sAnimationCleanFuncs[sAnimationControl.mCurrentAnimation](&sAnimationControl.mAnimation[sAnimationControl.mCurrentAnimation]);
+    }
 
     /* switch animation */
     sAnimationControl.mCurrentAnimation = (sAnimationControl.mCurrentAnimation + 1) & 1;

@@ -30,6 +30,8 @@ struct s_ws2812_anim_base {
 
 typedef void (*f_ws2812_anim_init)(tu_ws2812_anim * pThis, tu_ws2812_anim_param * pParam);
 
+typedef void (*f_ws2812_anim_clean)(tu_ws2812_anim * pThis);
+
 
 
 
