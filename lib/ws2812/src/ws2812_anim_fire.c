@@ -7,14 +7,17 @@
 #include "ws2812_anim_fire.h"
 
 #include "mt_random.h"
+#include "mt_arithm.h"
 
 
-#define MAX_TEMP    (240)
-#define MIN_TEMP    (60)
+#define MAX_HEAT    (240)
+#define MAX_HEAT_UP (30)
+#define MIN_HEAT_UP (10)
 #define MAX_COOLING (60)
 #define MIN_COOLING (20)
 
 
+/*! This function cools everything a bit down */
 static void ws2812_anim_fire_update_cool(tu_ws2812_anim * pThis) {
 
     size_t lCountX;
@@ -23,6 +26,7 @@ static void ws2812_anim_fire_update_cool(tu_ws2812_anim * pThis) {
     uint8_t lRandom;
     uint8_t lHeat;
 
+    /* all rows except last one (which gets replaced by shift up) */
     for(lCountY = 0; lCountY < WS2812_NR_ROWS-1; lCountY++) {
         for(lCountX = 0; lCountX < WS2812_NR_COLUMNS; lCountX++) {
 
@@ -30,12 +34,7 @@ static void ws2812_anim_fire_update_cool(tu_ws2812_anim * pThis) {
             lRandom = xorshift8_range(MIN_COOLING, MAX_COOLING);
             lHeat = pThis->mFire.mHeat[lCountY * WS2812_NR_COLUMNS + lCountX];
 
-            /* substract a random amount of heat */
-            if(lHeat < lRandom) {
-                lHeat = 0;
-            } else {
-                lHeat = lHeat - lRandom;
-            }
+            lHeat = sub8_f(lHeat, lRandom);
 
             pThis->mFire.mHeat[lCountY * WS2812_NR_COLUMNS + lCountX] = lHeat;
         }
@@ -55,7 +54,9 @@ static void ws2812_anim_fire_update_fade(tu_ws2812_anim * pThis) {
         | 0 0 0 |
         | 1 2 1 |
 
-        hn(x, y) = (1 * h(n-1)(x-1, y-1) + 2 * h(n-1)(x, y-1) + 1*h(n-1)(x+1, y-1)) / 4
+        hn(x, y) = (1 * h(n-1)(x-1, y-1) + 
+                    2 * h(n-1)(x, y-1) +
+                    1 * h(n-1)(x+1, y-1)) / 4
     */
 
     /* all rows except first one */
@@ -86,11 +87,46 @@ static void ws2812_anim_fire_update_fade(tu_ws2812_anim * pThis) {
 static void ws2812_anim_fire_update_burn(tu_ws2812_anim * pThis) {
 
     size_t lCountX;
+    uint8_t lHeat;
+    uint8_t lRandom;
+
+    uint8_t lHeatBackup[3];
 
     /* only on first row */
     for(lCountX = 0; lCountX < WS2812_NR_COLUMNS; lCountX++) {
 
-        pThis->mFire.mHeat[lCountX] = xorshift8_range(MIN_TEMP, MAX_TEMP);
+        lHeat = pThis->mFire.mHeat[lCountX];
+        lRandom = xorshift8_range(MIN_HEAT_UP, MAX_HEAT_UP);
+
+        if(xorshift8() < 128) {
+
+            /* heat up */
+            lHeat = add8_cl(lHeat, lRandom, MAX_HEAT);
+
+        } else {
+
+            /* cool down */
+            lHeat = sub8_f(lHeat, lRandom);
+        }
+        pThis->mFire.mHeat[lCountX] = lHeat;
+    }
+
+    /* blurr the first line to limit high variation */
+    lHeatBackup[0] = 0;
+    lHeatBackup[1] = pThis->mFire.mHeat[0];
+    lHeatBackup[2] = pThis->mFire.mHeat[1];
+
+    for(lCountX = 0; lCountX < WS2812_NR_COLUMNS; lCountX++) {
+
+        lHeat = (uint8_t)(((uint32_t)lHeatBackup[0] + ((uint32_t)lHeatBackup[1] << 1) + (uint32_t)lHeatBackup[2]) >> 2);
+
+        lHeatBackup[0] = lHeatBackup[1];
+        lHeatBackup[1] = lHeatBackup[2];
+        if(lCountX < WS2812_NR_COLUMNS-1) {
+            lHeatBackup[2] = pThis->mFire.mHeat[lCountX + 1];
+        } else {
+            lHeatBackup[2] = 0;
+        }
     }
 }
 
