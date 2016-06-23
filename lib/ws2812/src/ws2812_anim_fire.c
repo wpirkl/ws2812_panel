@@ -12,9 +12,9 @@
 
 
 #define MAX_HEAT    (240)
-#define MAX_HEAT_UP (120)
-#define MIN_HEAT_UP (40)
-#define MAX_COOLING (30)
+#define MAX_HEAT_UP (40)
+#define MIN_HEAT_UP (15)
+#define MAX_COOLING (15)
 #define MIN_COOLING (0)
 
 
@@ -27,8 +27,8 @@ static void ws2812_anim_fire_update_cool(tu_ws2812_anim * pThis) {
     uint8_t lRandom;
     uint8_t lHeat;
 
-    /* all rows except last one (which gets replaced by shift up) */
-    for(lCountY = 0; lCountY < WS2812_NR_ROWS-1; lCountY++) {
+    /* all rows except first and last (which gets replaced by shift up and was already updated by burn) */
+    for(lCountY = 1; lCountY < WS2812_NR_ROWS-1; lCountY++) {
         for(lCountX = 0; lCountX < WS2812_NR_COLUMNS; lCountX++) {
 
             /* get a random cool down value */
@@ -99,7 +99,7 @@ static void ws2812_anim_fire_update_burn(tu_ws2812_anim * pThis) {
         lHeat = pThis->mFire.mHeat[lCountX];
         lRandom = xorshift8_range(MIN_HEAT_UP, MAX_HEAT_UP);
 
-        if(xorshift8() < 128) {
+        if(xorshift8() < xorshift8()) {
 
             /* heat up */
             lHeat = add8_cl(lHeat, lRandom, MAX_HEAT);
@@ -128,6 +128,8 @@ static void ws2812_anim_fire_update_burn(tu_ws2812_anim * pThis) {
         } else {
             lHeatBackup[2] = 0;
         }
+
+        pThis->mFire.mHeat[lCountX] = lHeat;
     }
 }
 
@@ -136,15 +138,10 @@ static void ws2812_anim_fire_update_burn(tu_ws2812_anim * pThis) {
 static void ws2812_anim_fire_update_draw(tu_ws2812_anim * pThis) {
 
     size_t lCount;
-    color lColor;
 
     for(lCount = 0; lCount < WS2812_NR_ROWS * WS2812_NR_COLUMNS; lCount++) {
 
-        color_palette_get_e(pThis->mFire.mPalette, &lColor, pThis->mFire.mHeat[lCount]);
-
-        pThis->mBase.mPanel[lCount].R = lColor.R;
-        pThis->mBase.mPanel[lCount].G = lColor.G;
-        pThis->mBase.mPanel[lCount].B = lColor.B;
+        color_palette_get_e(pThis->mFire.mPalette, &pThis->mBase.mPanel[lCount], pThis->mFire.mHeat[lCount]);
     }
 }
 
@@ -153,14 +150,14 @@ static void ws2812_anim_fire_update(tu_ws2812_anim * pThis) {
 
     if(pThis->mFire.mHeat) {
 
-        /* 1st cool down */
+        /* 1st add new fire */
+        ws2812_anim_fire_update_burn(pThis);
+
+        /* 2nd cool down */
         ws2812_anim_fire_update_cool(pThis);
 
-        /* 2nd drift up with blurring */
+        /* 3rd drift up with blurring */
         ws2812_anim_fire_update_fade(pThis);
-
-        /* 3rd add new fire */
-        ws2812_anim_fire_update_burn(pThis);
 
         /* 4th draw from palette */
         ws2812_anim_fire_update_draw(pThis);
@@ -170,7 +167,6 @@ static void ws2812_anim_fire_update(tu_ws2812_anim * pThis) {
 
 void ws2812_anim_fire_init(tu_ws2812_anim * pThis, tu_ws2812_anim_param * pParam) {
 
-	printf("%s(%d): init\r\n", __FILE__, __LINE__);
     pThis->mBase.mfUpdate   = ws2812_anim_fire_update;
     pThis->mFire.mPalette   = pParam->mFire.mPalette;
 
@@ -178,8 +174,8 @@ void ws2812_anim_fire_init(tu_ws2812_anim * pThis, tu_ws2812_anim_param * pParam
     if(pThis->mFire.mHeat) {
         memset(pThis->mFire.mHeat, 0, WS2812_NR_ROWS * WS2812_NR_COLUMNS);
     } else {
-		printf("%s(%d): malloc failed!\r\n", __FILE__, __LINE__);
-	}
+        printf("%s(%d): malloc failed!\r\n", __FILE__, __LINE__);
+    }
 }
 
 
